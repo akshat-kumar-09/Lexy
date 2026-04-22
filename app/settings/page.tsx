@@ -3,15 +3,8 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Link from "next/link";
 import { GenreStrip } from "@/components/GenreStrip";
-import { useLexicon, useSettings } from "@/lib/store";
-import type { LexiconData } from "@/lib/types";
+import { importLexiconFromUnknown, useLexicon, useSettings } from "@/lib/store";
 import { useEffect, useRef, useState } from "react";
-
-function isLexiconData(x: unknown): x is LexiconData {
-  if (!x || typeof x !== "object") return false;
-  const o = x as Record<string, unknown>;
-  return typeof o.words === "object" && o.words !== null && Array.isArray(o.daily_history);
-}
 
 const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
@@ -41,11 +34,12 @@ export default function SettingsPage() {
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        if (!isLexiconData(parsed)) {
+        const data = importLexiconFromUnknown(parsed);
+        if (!data) {
           setImportMsg("That file is not a valid Lexy lexicon JSON.");
           return;
         }
-        importLexicon(parsed);
+        importLexicon(data);
         setImportMsg("Lexicon imported. It will sync to your account if you are signed in.");
       } catch {
         setImportMsg("Could not read that JSON file.");
@@ -121,14 +115,14 @@ export default function SettingsPage() {
         </button>
 
         <p className="text-xs leading-relaxed text-[#B0A898]">
-          Without a key, Morning Scribble, Daily Word, and Deep Dive stay idle. The lexicon works either way.
+          Without a key, Morning Scribble, Metaphors, and Deep Dive stay idle. The lexicon works either way.
         </p>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-6">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Taste & interests</h2>
         <p className="text-sm leading-relaxed text-[#6A6360]">
-          Genres here steer Daily Word and Deep Dive. Your lexicon ratings still teach Lexy what to keep or drop.
+          Today&apos;s threads steer Metaphors and Deep Dive — not a permanent box, just what you feel like now. Ratings still teach Lexy what to keep.
         </p>
         <GenreStrip />
       </section>

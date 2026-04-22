@@ -1,4 +1,4 @@
-export type WordSource = "scribble" | "daily" | "deep_dive";
+export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily";
 
 export interface LexiconWord {
   word: string;
@@ -14,18 +14,18 @@ export interface LexiconWord {
 
 export interface LexiconData {
   words: Record<string, LexiconWord>;
-  daily_history: DailyWordEntry[];
+  /** One metaphor per calendar day. */
+  metaphor_history: MetaphorDayEntry[];
 }
 
-export interface DailyWordEntry {
+export interface MetaphorDayEntry {
   date: string;
-  word: string;
-  definition: string;
-  pronunciation: string;
-  part_of_speech?: string;
-  example_sentences?: string[];
-  origin?: string;
-  usage_challenge?: string;
+  metaphor: string;
+  unpacking: string;
+  /** Why the image works (vehicle / tenor in plain language). */
+  image_strength?: string;
+  example_sentences: string[];
+  try_today?: string;
   why_today?: string;
 }
 

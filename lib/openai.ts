@@ -1,8 +1,8 @@
 import { genreContextForPrompt } from "@/lib/genres";
 import type {
-  DailyWordEntry,
   DeepDiveResult,
   LexiconWord,
+  MetaphorDayEntry,
   ScribbleAnalysis,
   TasteGridResponse,
   TasteGridWord,
@@ -153,42 +153,40 @@ export async function analyseScribble(
   );
 }
 
-export async function generateDailyWord(
+export async function generateMetaphorOfTheDay(
   apiKey: string,
   lexicon: Record<string, LexiconWord>,
   genreIds: string[] = []
-): Promise<Omit<DailyWordEntry, "date">> {
+): Promise<Omit<MetaphorDayEntry, "date">> {
   const keys = Object.keys(lexicon).slice(0, 40);
   const known = keys.length
     ? keys.join(", ")
-    : "none yet — infer taste from general literary sensibility";
+    : "none yet — infer a thoughtful, image-minded reader";
 
   const genreBlock = genreContextForPrompt(genreIds);
 
-  const system = `You are Lexy. Return ONLY valid JSON:
+  const system = `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
 {
-  "word": "lemma",
-  "pronunciation": "IPA with slashes",
-  "part_of_speech": "string",
-  "definition": "full definition",
-  "example_sentences": ["three distinct example sentences, literary but natural"],
-  "origin": "etymology",
-  "usage_challenge": "one short challenge for the day — warm, not bossy",
-  "why_today": "one sentence: why this word for this reader today"
+  "metaphor": "one vivid metaphorical phrase or image (not a single vocabulary lemma — a figurative line someone could adopt)",
+  "unpacking": "what it means in plain language — tenor and vehicle clear without jargon",
+  "image_strength": "one sentence: why this image lands, what feeling or idea it carries",
+  "example_sentences": ["three distinct sentences that use or clearly allude to this metaphor, natural voice"],
+  "try_today": "one short, warm challenge to try it in speech or writing today",
+  "why_today": "one sentence: why this metaphor for this reader today, given their lexicon and today's threads"
 }
-Every string field must be present. example_sentences must have exactly 3 items. Pronunciation is mandatory.`;
+Every string field must be present. example_sentences must have exactly 3 items.`;
 
-  const user = `Words this person already treasures: ${known}
+  const user = `Words and phrases this person already keeps: ${known}
 ${genreBlock}
-Pick ONE word for today — not random, but tuned to their aesthetic and gaps. It should feel like opening the right page in a rare book.
-If interest lenses are given, the word should clearly belong to at least one of those worlds (or bridge two) while still fitting their ratings.`;
+Offer ONE metaphor for today — fresh, specific, not a cliché unless subverted. It should feel wearable: something they can actually say.
+If today's threads are given, the metaphor should clearly resonate with at least one of those angles (or bridge two) while still fitting their saved language.`;
 
-  return chatJson<Omit<DailyWordEntry, "date">>(
+  return chatJson<Omit<MetaphorDayEntry, "date">>(
     apiKey,
     "gpt-4o-mini",
     system,
     user,
-    0.65
+    0.7
   );
 }
 
@@ -233,7 +231,7 @@ Rules:
 - Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
 - Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
-- If interest lenses are provided in the user message, at least half the suggestions should clearly evoke those worlds (spread across the chosen lenses), while the rest can bridge outward so the grid still feels varied.`;
+- If today's threads are provided in the user message, at least half the suggestions should clearly evoke those worlds (spread across the chosen threads), while the rest can bridge outward so the grid still feels varied.`;
 
   const last =
     context?.lastRatedWord && context.lastRating != null

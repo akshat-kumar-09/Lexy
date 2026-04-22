@@ -6,12 +6,12 @@ const cards = [
   {
     href: "/dive",
     title: "Word Deep Dive",
-    line: "Twenty-five words at a time — tuned to your lexicon and the genres you pick. Rate to teach Lexy what you love.",
+    line: "Twenty-five words at a time — tuned to your lexicon and what you feel like exploring today. Rate to teach Lexy what you love.",
   },
   {
-    href: "/daily",
-    title: "Daily Word",
-    line: "One word per day, meant for you — your saved words plus the worlds you said you care about.",
+    href: "/metaphors",
+    title: "Metaphor of the day",
+    line: "One fresh metaphor a day — same rating flow as everything else. Save it: 7.7+ becomes a favourite in your lexicon.",
   },
   {
     href: "/lexicon",
@@ -33,11 +33,14 @@ export default function HomePage() {
         <h1 className="font-serif text-[1.65rem] font-normal italic leading-snug tracking-tight text-[#1C1917] sm:text-3xl md:text-4xl md:leading-tight">
           Language is the dress of thought.
         </h1>
+        <p className="font-serif text-lg font-bold leading-snug text-[#8B7355] sm:text-xl md:text-2xl">
+          Lexy is your wardrobe.
+        </p>
         <p className="text-base leading-relaxed text-[#6A6360]">
-          Lexy grows vocabulary from who you already are — not a single template. Choose a few{" "}
-          <span className="italic text-[#8B7355]">interest lenses</span> (nature, music, myth, tech, and more), keep
-          rating words you adore, and Daily + Deep Dive will keep surfacing language that fits{" "}
-          <span className="italic text-[#4A4340]">your</span> taste and obsessions.
+          Lexy grows from who you already are — not a checklist of who you&apos;re supposed to be.{" "}
+          <span className="italic text-[#8B7355]">How do you feel today?</span> What side of your interests do you want
+          to lean into — just for now, not forever? Pick a few threads below; Metaphors and Deep Dive listen, and your
+          ratings keep teaching the wardrobe what fits.
         </p>
       </div>
 

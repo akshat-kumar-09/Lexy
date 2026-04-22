@@ -1,10 +1,11 @@
 "use client";
 
+import { migrateLegacyDailyRows, normalizeLexiconPayload } from "@/lib/lexiconMigrate";
+import type { LexiconData, LexiconWord, MetaphorDayEntry } from "@/lib/types";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { LexiconData, LexiconWord } from "@/lib/types";
 
-const empty: LexiconData = { words: {}, daily_history: [] };
+const empty: LexiconData = { words: {}, metaphor_history: [] };
 
 export interface SettingsState {
   openaiApiKey: string;
@@ -24,7 +25,7 @@ export const useSettings = create<SettingsState>()(
 interface LexiconStore extends LexiconData {
   upsertWord: (w: LexiconWord) => void;
   updateRating: (wordKey: string, rating: number) => void;
-  appendDaily: (entry: LexiconData["daily_history"][number]) => void;
+  appendMetaphor: (entry: MetaphorDayEntry) => void;
   importLexicon: (data: LexiconData) => void;
   exportText: () => string;
   exportLexiconJson: () => string;
@@ -50,15 +51,15 @@ export const useLexicon = create<LexiconStore>()(
             },
           };
         }),
-      appendDaily: (entry) =>
+      appendMetaphor: (entry) =>
         set((s) => {
-          const rest = s.daily_history.filter((h) => h.date !== entry.date);
-          return { daily_history: [...rest, entry] };
+          const rest = s.metaphor_history.filter((h) => h.date !== entry.date);
+          return { metaphor_history: [...rest, entry] };
         }),
       importLexicon: (data) =>
         set({
           words: data.words ?? {},
-          daily_history: data.daily_history ?? [],
+          metaphor_history: data.metaphor_history ?? [],
         }),
       exportText: () => {
         const words = get().words;
@@ -71,13 +72,48 @@ export const useLexicon = create<LexiconStore>()(
           .join("\n---\n\n");
       },
       exportLexiconJson: () => {
-        const { words, daily_history } = get();
-        return JSON.stringify({ words, daily_history }, null, 2);
+        const { words, metaphor_history } = get();
+        return JSON.stringify({ words, metaphor_history }, null, 2);
       },
     }),
-    { name: "lexy-lexicon", storage: createJSONStorage(() => localStorage) }
+    {
+      name: "lexy-lexicon",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        words: s.words,
+        metaphor_history: s.metaphor_history,
+      }),
+      merge: (persistedState, currentState) => {
+        const p = persistedState as
+          | (Partial<LexiconData> & { daily_history?: unknown[] })
+          | null
+          | undefined;
+        if (!p || typeof p !== "object") return currentState;
+        const words =
+          p.words && typeof p.words === "object"
+            ? (p.words as LexiconData["words"])
+            : currentState.words;
+        let metaphor_history: MetaphorDayEntry[] = currentState.metaphor_history;
+        if (Array.isArray(p.metaphor_history)) {
+          metaphor_history = migrateLegacyDailyRows(p.metaphor_history);
+        } else if (Array.isArray(p.daily_history)) {
+          metaphor_history = migrateLegacyDailyRows(p.daily_history);
+        } else if (!Array.isArray(p.metaphor_history)) {
+          metaphor_history = [];
+        }
+        return {
+          ...currentState,
+          words,
+          metaphor_history,
+        };
+      },
+    }
   )
 );
+
+export function importLexiconFromUnknown(data: unknown): LexiconData | null {
+  return normalizeLexiconPayload(data);
+}
 
 export function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);

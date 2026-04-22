@@ -21,10 +21,11 @@ export function GenreStrip({ compact, className = "" }: Props) {
           <p
             className={`font-semibold uppercase tracking-[0.14em] text-[#B0A898] ${compact ? "text-[9px]" : "text-[10px]"}`}
           >
-            Interest lenses
+            How do you feel today?
           </p>
           <p className={`mt-1 text-[#8B7355] ${compact ? "text-[11px]" : "text-xs"}`}>
-            Pick up to {MAX_GENRES} — Daily and Deep Dive lean into these worlds.
+            What side of your interests do you want to dive into — <span className="italic">today</span>, not forever.
+            Up to {MAX_GENRES} threads; Metaphors and Deep Dive listen.
           </p>
         </div>
         {genreIds.length > 0 && (

@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 const nav = [
   { href: "/", label: "Home", short: "Home" },
   { href: "/dive", label: "Deep dive", short: "Dive" },
-  { href: "/daily", label: "Daily", short: "Daily" },
+  { href: "/metaphors", label: "Metaphor", short: "Today" },
   { href: "/lexicon", label: "Lexicon", short: "Words" },
   { href: "/scribble", label: "Scribble", short: "Write" },
 ];
@@ -21,7 +21,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link href="/" className="font-serif text-2xl font-bold tracking-tight text-[#F5EFE0]">
           Lexy
         </Link>
-        <p className="mt-1 font-serif text-sm italic text-[#A8A098]">your vocabulary companion</p>
+        <p className="mt-1 font-serif text-sm italic text-[#A8A098]">your wardrobe for words</p>
         <nav className="mt-10 flex flex-col gap-1">
           {nav.map((n) => {
             const active = pathname === n.href;

@@ -20,9 +20,9 @@ const libre = Libre_Baskerville({
 });
 
 export const metadata: Metadata = {
-  title: "Lexy — your vocabulary companion",
+  title: "Lexy — your wardrobe for words",
   description:
-    "Lexy learns your taste in language, grows your vocabulary based on who you already are as a thinker, and turns your morning scribbles into a personal library of words you love.",
+    "Language is the dress of thought — Lexy is your wardrobe. Metaphors, deep dives, morning scribbles, and a lexicon that learns your taste — one day’s thread at a time.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
-import { useLexicon } from "@/lib/store";
+import { importLexiconFromUnknown, useLexicon } from "@/lib/store";
 import { useEffect, useRef, useState } from "react";
 
 const DEBOUNCE_MS = 1500;
@@ -37,26 +37,31 @@ function LexiconCloudSyncInner() {
 
         const data = (await res.json()) as {
           words?: Record<string, unknown>;
+          metaphor_history?: unknown[];
           daily_history?: unknown[];
         };
-        const serverWords = data.words && typeof data.words === "object" ? data.words : {};
+        const normalized = importLexiconFromUnknown({
+          words: data.words,
+          metaphor_history: data.metaphor_history,
+          daily_history: data.daily_history,
+        });
+        if (!normalized) return;
+
+        const serverWords = normalized.words;
         const serverCount = Object.keys(serverWords).length;
         const local = useLexicon.getState();
         const localCount = Object.keys(local.words).length;
 
         skipNextSave.current = true;
         if (serverCount > 0) {
-          importLexicon({
-            words: data.words as typeof local.words,
-            daily_history: (data.daily_history ?? []) as typeof local.daily_history,
-          });
+          importLexicon(normalized);
         } else if (localCount > 0) {
           await fetch("/api/lexicon", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               words: local.words,
-              daily_history: local.daily_history,
+              metaphor_history: local.metaphor_history,
             }),
           });
         }
@@ -86,7 +91,7 @@ function LexiconCloudSyncInner() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             words: state.words,
-            daily_history: state.daily_history,
+            metaphor_history: state.metaphor_history,
           }),
         });
       }, DEBOUNCE_MS);

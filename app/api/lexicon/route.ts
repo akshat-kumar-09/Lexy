@@ -1,17 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
+import { normalizeLexiconPayload } from "@/lib/lexiconMigrate";
 import { NextResponse } from "next/server";
 import type { LexiconData } from "@/lib/types";
 import { getSql } from "@/lib/db";
 
 function parseBody(data: unknown): LexiconData | null {
-  if (!data || typeof data !== "object") return null;
-  const o = data as Record<string, unknown>;
-  if (!o.words || typeof o.words !== "object") return null;
-  if (!Array.isArray(o.daily_history)) return null;
-  return {
-    words: o.words as LexiconData["words"],
-    daily_history: o.daily_history as LexiconData["daily_history"],
-  };
+  return normalizeLexiconPayload(data);
 }
 
 export async function GET() {
@@ -26,12 +20,16 @@ export async function GET() {
   const rows = await sql`
     SELECT payload, updated_at FROM lexicon_snapshots WHERE user_id = ${userId}
   `;
-  const row = rows[0] as { payload: LexiconData; updated_at: string } | undefined;
+  const row = rows[0] as { payload: unknown; updated_at: string } | undefined;
   if (!row) {
-    return NextResponse.json({ words: {}, daily_history: [], updated_at: null });
+    return NextResponse.json({ words: {}, metaphor_history: [], updated_at: null });
   }
+  const normalized = normalizeLexiconPayload(row.payload) ?? {
+    words: {},
+    metaphor_history: [],
+  };
   return NextResponse.json({
-    ...row.payload,
+    ...normalized,
     updated_at: row.updated_at,
   });
 }

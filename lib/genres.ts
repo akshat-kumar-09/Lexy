@@ -118,5 +118,5 @@ export function genreContextForPrompt(selectedIds: string[]): string {
   const picked = selectedIds.map((id) => byId.get(id)).filter(Boolean) as LexyGenre[];
   if (!picked.length) return "";
   const lines = picked.map((g) => `• ${g.title}: ${g.promptHint}`);
-  return `Interest lenses (bias new vocabulary toward these worlds — still harmonize with their lexicon ratings):\n${lines.join("\n")}\n`;
+  return `Today's threads — what they want to lean into right now, not a permanent label (still harmonize with lexicon ratings):\n${lines.join("\n")}\n`;
 }

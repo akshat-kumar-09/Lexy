@@ -85,7 +85,7 @@ export default function LexiconPage() {
         <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/80 px-8 py-20 text-center">
           <p className="font-serif text-xl text-[#B0A898]">Your lexicon is empty.</p>
           <p className="mt-3 text-sm leading-relaxed text-[#C8C0B8]">
-            The words you love are waiting to be found — try a morning scribble or reveal today&apos;s word.
+            The words you love are waiting to be found — try a morning scribble, a deep dive, or today&apos;s metaphor.
           </p>
         </div>
       ) : (

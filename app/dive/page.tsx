@@ -121,7 +121,8 @@ export default function DivePage() {
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Word Deep Dive</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
           Twenty-five words picked for your taste — the set turns over each time you rate one, and Lexy leans into what
-          you love. Tap a word for the full story; IPA is always in the room.
+          you love. Today&apos;s threads (above) steer the palette; tomorrow you can choose different ones. Tap a word
+          for the full story; IPA is always in the room.
         </p>
       </div>
 
