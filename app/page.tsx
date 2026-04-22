@@ -1,4 +1,3 @@
-import { GenreStrip } from "@/components/GenreStrip";
 import { LexyHomePreview } from "@/components/LexyHomePreview";
 import Link from "next/link";
 
@@ -44,10 +43,6 @@ export default function HomePage() {
 
       <LexyHomePreview />
 
-      <section className="rounded-2xl border border-[#EDE8E0] bg-white p-4 shadow-sm sm:p-5 md:p-6">
-        <GenreStrip />
-      </section>
-
       <div className="grid gap-3 sm:gap-4">
         {cards.map((c) => (
           <Link
@@ -60,10 +55,6 @@ export default function HomePage() {
           </Link>
         ))}
       </div>
-
-      <p className="text-center font-serif text-sm italic text-[#B0A898]">
-        Knowing how to say a word is as important as knowing what it means.
-      </p>
     </div>
   );
 }

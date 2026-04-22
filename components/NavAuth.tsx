@@ -69,13 +69,15 @@ export function NavAuthMobile() {
         </Link>
       </SignedOut>
       <SignedIn>
-        <UserButton
-          appearance={{
-            elements: {
-              avatarBox: "h-9 w-9 min-h-9 min-w-9",
-            },
-          }}
-        />
+        <div className="flex h-11 items-center justify-center">
+          <UserButton
+            appearance={{
+              elements: {
+                avatarBox: "h-9 w-9 min-h-9 min-w-9",
+              },
+            }}
+          />
+        </div>
       </SignedIn>
     </>
   );

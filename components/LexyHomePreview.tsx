@@ -40,8 +40,8 @@ export function LexyHomePreview() {
       <div className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-[#8B7355]/12 sm:h-40 sm:w-40" />
       <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-[#8B7355]/10 sm:-right-8 sm:-top-8 sm:h-36 sm:w-36" />
 
-      <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-[#8B7355] sm:text-[10px]">This moment</p>
-      <h2 className="mt-2.5 font-serif text-[1.35rem] font-normal italic leading-[1.2] tracking-tight text-[#F5EFE0] sm:mt-3 sm:text-2xl md:text-[1.75rem]">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#B0A898] sm:text-[10px]">Preview</p>
+      <h2 className="mt-2.5 font-serif text-lg font-bold leading-tight tracking-tight text-[#F5EFE0] sm:mt-3 sm:text-xl md:text-2xl">
         How do you feel this instant?
       </h2>
       <p className="mt-2 max-w-md text-[13px] italic leading-relaxed text-[#A8A098] sm:text-sm">{hint}</p>
@@ -110,7 +110,7 @@ export function LexyHomePreview() {
         </Link>
         <span className="mx-2 text-[#4A4340]">·</span>
         <Link href="/metaphors" className="font-semibold text-[#8B7355] active:text-[#C8BFB0] sm:hover:text-[#C8BFB0]">
-          Today&apos;s metaphor
+          Metaphors
         </Link>
       </p>
     </div>

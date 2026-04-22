@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 const nav = [
   { href: "/", label: "Home", short: "Home" },
   { href: "/dive", label: "Deep dive", short: "Dive" },
-  { href: "/metaphors", label: "Metaphor", short: "Today" },
+  { href: "/metaphors", label: "Metaphor", short: "Metaphor" },
   { href: "/lexicon", label: "Lexicon", short: "Words" },
   { href: "/scribble", label: "Scribble", short: "Write" },
 ];
@@ -55,15 +55,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex min-h-[100dvh] flex-1 flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
-        <header className="flex min-h-[3rem] items-center gap-2 border-b border-[#EDE8E0] px-4 py-3 sm:px-5 md:min-h-0 md:px-10 md:py-5">
-          <Link href="/" className="font-serif text-xl font-bold leading-none md:hidden">
+        <header className="flex min-h-[3.25rem] items-center gap-2 border-b border-[#EDE8E0] px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-5 md:min-h-0 md:px-10 md:py-5">
+          <Link
+            href="/"
+            className="flex min-h-11 items-center font-serif text-xl font-bold leading-none md:hidden"
+          >
             Lexy
           </Link>
-          <div className="ml-auto flex items-center gap-2 md:hidden">
+          <div className="ml-auto flex items-center gap-1 sm:gap-2 md:hidden">
             <NavAuthMobile />
             <Link
               href="/settings"
-              className="min-h-11 min-w-[4.25rem] px-2 py-2 text-center text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-[#8B7355] active:opacity-70"
+              className="flex min-h-11 min-w-[4.5rem] items-center justify-center px-2 text-[11px] font-semibold uppercase leading-tight tracking-[0.12em] text-[#8B7355] active:opacity-70"
             >
               Settings
             </Link>
