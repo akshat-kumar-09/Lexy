@@ -23,9 +23,9 @@ export function GenreStrip({ compact, className = "" }: Props) {
           >
             How do you feel today?
           </p>
-          <p className={`mt-1 text-[#8B7355] ${compact ? "text-[11px]" : "text-xs"}`}>
-            What side of your interests do you want to dive into — <span className="italic">today</span>, not forever.
-            Up to {MAX_GENRES} threads; Metaphors and Deep Dive listen.
+          <p className={`mt-1 text-[#8B7355] ${compact ? "text-[11px] leading-snug" : "text-xs leading-relaxed"}`}>
+            A door for <span className="italic">now</span>, not forever — up to {MAX_GENRES} threads. Metaphor &amp; Deep
+            Dive listen.
           </p>
         </div>
         {genreIds.length > 0 && (

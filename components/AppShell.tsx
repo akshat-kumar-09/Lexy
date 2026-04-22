@@ -1,6 +1,9 @@
 "use client";
 
 import { NavAuthMobile, NavAuthSidebar } from "@/components/NavAuth";
+import { PageEssence } from "@/components/PageEssence";
+import { VoiceValuedButton } from "@/components/VoiceValuedButton";
+import { getEssenceLine } from "@/lib/languageQuotes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -66,8 +69,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </div>
         </header>
+        <PageEssence line={getEssenceLine(pathname)} />
         <div className="flex-1 px-4 py-5 sm:px-5 sm:py-6 md:px-10 md:py-10">{children}</div>
       </main>
+
+      <VoiceValuedButton />
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-[#EDE8E0] bg-[#FEFCF8]/95 px-1 pt-1 pb-[calc(0.35rem+env(safe-area-inset-bottom))] backdrop-blur-md md:hidden">
         {nav.map((n) => {

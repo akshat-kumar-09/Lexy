@@ -22,11 +22,17 @@ export async function GET() {
   `;
   const row = rows[0] as { payload: unknown; updated_at: string } | undefined;
   if (!row) {
-    return NextResponse.json({ words: {}, metaphor_history: [], updated_at: null });
+    return NextResponse.json({
+      words: {},
+      metaphor_history: [],
+      scribble_rewrites: [],
+      updated_at: null,
+    });
   }
   const normalized = normalizeLexiconPayload(row.payload) ?? {
     words: {},
     metaphor_history: [],
+    scribble_rewrites: [],
   };
   return NextResponse.json({
     ...normalized,

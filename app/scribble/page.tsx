@@ -10,7 +10,7 @@ import { useLexicon, useSettings, todayISODate } from "@/lib/store";
 import type { ScribbleAnalysis, VocabularyCandidate } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
   return new Promise((resolve, reject) => {
@@ -32,6 +32,8 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
 export default function ScribblePage() {
   const apiKey = useSettings((s) => s.openaiApiKey);
   const upsertWord = useLexicon((s) => s.upsertWord);
+  const appendScribbleRewrite = useLexicon((s) => s.appendScribbleRewrite);
+  const scribble_rewrites = useLexicon((s) => s.scribble_rewrites);
 
   const [tab, setTab] = useState<"photo" | "text">("text");
   const [pasted, setPasted] = useState("");
@@ -44,6 +46,9 @@ export default function ScribblePage() {
   const [result, setResult] = useState<ScribbleAnalysis | null>(null);
   const [burst, setBurst] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [openRewriteId, setOpenRewriteId] = useState<string | null>(null);
+
+  const recentRewrites = useMemo(() => scribble_rewrites.slice(0, 12), [scribble_rewrites]);
 
   const onPickFile = useCallback((f: File | null) => {
     setFile(f);
@@ -83,6 +88,15 @@ export default function ScribblePage() {
     try {
       const r = await analyseScribble(apiKey, text);
       setResult(r);
+      appendScribbleRewrite({
+        id:
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `sr-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        saved_at: new Date().toISOString(),
+        source_excerpt: text.slice(0, 2000),
+        upgraded_version: r.upgraded_version,
+      });
       const init: Record<string, number> = {};
       for (const c of r.vocabulary_candidates) {
         init[c.word.toLowerCase()] = 7;
@@ -142,6 +156,46 @@ export default function ScribblePage() {
           that fit the way you think.
         </p>
       </div>
+
+      {recentRewrites.length > 0 && (
+        <section className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0]/80 p-4 sm:p-5">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B7355]">Your saved rewrites</h2>
+          <p className="mt-1 text-xs leading-relaxed text-[#6A6360]">
+            Every lifted version is kept here automatically — Lexy&apos;s rephrase of what you scribbled.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {recentRewrites.map((rw) => {
+              const open = openRewriteId === rw.id;
+              const dt = new Date(rw.saved_at);
+              const label = Number.isNaN(dt.getTime()) ? rw.saved_at : dt.toLocaleString();
+              return (
+                <li key={rw.id} className="rounded-xl border border-[#EDE8E0] bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setOpenRewriteId(open ? null : rw.id)}
+                    className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-medium text-[#4A4340] transition hover:bg-[#FDFBF7]"
+                  >
+                    <span className="truncate font-serif italic text-[#8B7355]">{label}</span>
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[#B0A898]">
+                      {open ? "Hide" : "Read"}
+                    </span>
+                  </button>
+                  {open && (
+                    <div className="border-t border-[#F5F0EA] px-3 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">Original bit</p>
+                      <p className="mt-1 max-h-24 overflow-y-auto font-serif text-xs italic leading-relaxed text-[#6A6360]">
+                        {rw.source_excerpt}
+                      </p>
+                      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">Lexy&apos;s version</p>
+                      <p className="mt-1 font-serif text-sm leading-relaxed text-[#1C1917]">{rw.upgraded_version}</p>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {!result && (
         <div className="flex gap-2 rounded-2xl border border-[#EDE8E0] bg-white p-1">

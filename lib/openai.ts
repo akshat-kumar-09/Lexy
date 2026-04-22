@@ -2,7 +2,7 @@ import { genreContextForPrompt } from "@/lib/genres";
 import type {
   DeepDiveResult,
   LexiconWord,
-  MetaphorDayEntry,
+  MetaphorGridResponse,
   ScribbleAnalysis,
   TasteGridResponse,
   TasteGridWord,
@@ -153,41 +153,74 @@ export async function analyseScribble(
   );
 }
 
-export async function generateMetaphorOfTheDay(
+/**
+ * Exactly 10 metaphors for the grid — same rhythm as Deep Dive’s 25-word grid, fewer cells.
+ */
+export async function generateMetaphorGrid(
   apiKey: string,
   lexicon: Record<string, LexiconWord>,
-  genreIds: string[] = []
-): Promise<Omit<MetaphorDayEntry, "date">> {
+  genreIds: string[] = [],
+  excludeMetaphors: string[] = []
+): Promise<MetaphorGridResponse> {
   const keys = Object.keys(lexicon).slice(0, 40);
   const known = keys.length
     ? keys.join(", ")
     : "none yet — infer a thoughtful, image-minded reader";
 
   const genreBlock = genreContextForPrompt(genreIds);
+  const excludeSet = new Set(excludeMetaphors.map((m) => m.toLowerCase().trim()).filter(Boolean));
+  const excludeList = [...excludeSet].slice(0, 120).join(", ") || "(none)";
 
   const system = `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
 {
-  "metaphor": "one vivid metaphorical phrase or image (not a single vocabulary lemma — a figurative line someone could adopt)",
-  "unpacking": "what it means in plain language — tenor and vehicle clear without jargon",
-  "image_strength": "one sentence: why this image lands, what feeling or idea it carries",
-  "example_sentences": ["three distinct sentences that use or clearly allude to this metaphor, natural voice"],
-  "try_today": "one short, warm challenge to try it in speech or writing today",
-  "why_today": "one sentence: why this metaphor for this reader today, given their lexicon and today's threads"
+  "suggestions": [
+    {
+      "metaphor": "vivid figurative phrase someone could adopt — not a single dictionary lemma",
+      "unpacking": "plain language: what the image means",
+      "image_strength": "one sentence: why this image lands",
+      "example_sentences": ["three natural sentences using or alluding to this metaphor"],
+      "why_for_you": "one short line: why this fits their taste and today's threads"
+    }
+  ]
 }
-Every string field must be present. example_sentences must have exactly 3 items.`;
+Rules:
+- suggestions must contain EXACTLY 10 items.
+- Each item needs all fields. example_sentences must have exactly 3 strings.
+- Metaphors must be distinct — no near-duplicates.
+- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).`;
 
-  const user = `Words and phrases this person already keeps: ${known}
+  const user = `They already keep these words/phrases: ${known}
 ${genreBlock}
-Offer ONE metaphor for today — fresh, specific, not a cliché unless subverted. It should feel wearable: something they can actually say.
-If today's threads are given, the metaphor should clearly resonate with at least one of those angles (or bridge two) while still fitting their saved language.`;
+Already shown or saved today (do NOT repeat these images): ${excludeList}
 
-  return chatJson<Omit<MetaphorDayEntry, "date">>(
-    apiKey,
-    "gpt-4o-mini",
-    system,
-    user,
-    0.7
+Return 10 NEW wearable metaphors — fresh, specific; clichés only if subverted. Spread across varied images while still coherent with their lexicon and today's threads.`;
+
+  const raw = await chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system, user, 0.72);
+
+  let suggestions = Array.isArray(raw.suggestions) ? raw.suggestions : [];
+  suggestions = suggestions.filter(
+    (s) => s.metaphor && !excludeSet.has(s.metaphor.toLowerCase().trim())
   );
+
+  if (suggestions.length < 10) {
+    const need = 10 - suggestions.length;
+    const fill = await chatJson<MetaphorGridResponse>(
+      apiKey,
+      "gpt-4o-mini",
+      `${system}\nThe previous reply had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
+      `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${genreBlock}`,
+      0.68
+    );
+    for (const s of fill.suggestions ?? []) {
+      if (suggestions.length >= 10) break;
+      const k = s.metaphor?.toLowerCase().trim();
+      if (k && !excludeSet.has(k) && !suggestions.some((x) => x.metaphor.toLowerCase() === k)) {
+        suggestions.push(s);
+      }
+    }
+  }
+
+  return { suggestions: suggestions.slice(0, 10) };
 }
 
 function lexiconTastePayload(lexicon: Record<string, LexiconWord>): string {

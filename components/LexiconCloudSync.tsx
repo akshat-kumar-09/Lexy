@@ -35,15 +35,12 @@ function LexiconCloudSyncInner() {
           return;
         }
 
-        const data = (await res.json()) as {
-          words?: Record<string, unknown>;
-          metaphor_history?: unknown[];
-          daily_history?: unknown[];
-        };
+        const data = (await res.json()) as Record<string, unknown>;
         const normalized = importLexiconFromUnknown({
           words: data.words,
           metaphor_history: data.metaphor_history,
           daily_history: data.daily_history,
+          scribble_rewrites: data.scribble_rewrites,
         });
         if (!normalized) return;
 
@@ -62,6 +59,7 @@ function LexiconCloudSyncInner() {
             body: JSON.stringify({
               words: local.words,
               metaphor_history: local.metaphor_history,
+              scribble_rewrites: local.scribble_rewrites,
             }),
           });
         }
@@ -92,6 +90,7 @@ function LexiconCloudSyncInner() {
           body: JSON.stringify({
             words: state.words,
             metaphor_history: state.metaphor_history,
+            scribble_rewrites: state.scribble_rewrites,
           }),
         });
       }, DEBOUNCE_MS);

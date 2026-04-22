@@ -12,21 +12,34 @@ export interface LexiconWord {
   source: WordSource;
 }
 
-export interface LexiconData {
-  words: Record<string, LexiconWord>;
-  /** One metaphor per calendar day. */
-  metaphor_history: MetaphorDayEntry[];
+/** One cell in the daily metaphor grid (10 at a time). */
+export interface MetaphorGridItem {
+  metaphor: string;
+  unpacking: string;
+  image_strength: string;
+  example_sentences: string[];
+  why_for_you: string;
 }
 
 export interface MetaphorDayEntry {
   date: string;
-  metaphor: string;
-  unpacking: string;
-  /** Why the image works (vehicle / tenor in plain language). */
-  image_strength?: string;
-  example_sentences: string[];
-  try_today?: string;
-  why_today?: string;
+  /** Ten metaphors for this reveal, like the Deep Dive grid. */
+  suggestions: MetaphorGridItem[];
+}
+
+export interface ScribbleRewriteEntry {
+  id: string;
+  saved_at: string;
+  /** First ~2k chars of what you wrote (or full). */
+  source_excerpt: string;
+  /** Lexy’s lifted, richer version — stored for you. */
+  upgraded_version: string;
+}
+
+export interface LexiconData {
+  words: Record<string, LexiconWord>;
+  metaphor_history: MetaphorDayEntry[];
+  scribble_rewrites: ScribbleRewriteEntry[];
 }
 
 export interface WordUpgrade {
@@ -81,4 +94,8 @@ export interface TasteGridWord {
 
 export interface TasteGridResponse {
   suggestions: TasteGridWord[];
+}
+
+export interface MetaphorGridResponse {
+  suggestions: MetaphorGridItem[];
 }

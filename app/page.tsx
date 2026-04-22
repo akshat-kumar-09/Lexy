@@ -10,8 +10,8 @@ const cards = [
   },
   {
     href: "/metaphors",
-    title: "Metaphor of the day",
-    line: "One fresh metaphor a day — same rating flow as everything else. Save it: 7.7+ becomes a favourite in your lexicon.",
+    title: "Metaphors",
+    line: "Ten images at a time — open one, rate it, save it. 7.7+ becomes a favourite, same as everywhere else.",
   },
   {
     href: "/lexicon",
@@ -27,20 +27,18 @@ const cards = [
 
 export default function HomePage() {
   return (
-    <div className="mx-auto max-w-2xl space-y-8 sm:space-y-10">
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8B7355]">Welcome</p>
-        <h1 className="font-serif text-[1.65rem] font-normal italic leading-snug tracking-tight text-[#1C1917] sm:text-3xl md:text-4xl md:leading-tight">
+    <div className="mx-auto max-w-2xl space-y-7 sm:space-y-9 md:space-y-10">
+      <div className="space-y-2.5 sm:space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B7355] sm:text-xs">Welcome</p>
+        <h1 className="font-serif text-[1.6rem] font-normal italic leading-[1.2] tracking-tight text-[#1C1917] sm:text-3xl md:text-4xl md:leading-tight">
           Language is the dress of thought.
         </h1>
-        <p className="font-serif text-lg font-bold leading-snug text-[#8B7355] sm:text-xl md:text-2xl">
+        <p className="font-serif text-[1.35rem] font-normal italic leading-[1.25] tracking-tight text-[#1C1917] sm:text-2xl md:text-3xl">
           Lexy is your wardrobe.
         </p>
-        <p className="text-base leading-relaxed text-[#6A6360]">
-          Lexy grows from who you already are — not a checklist of who you&apos;re supposed to be.{" "}
-          <span className="italic text-[#8B7355]">How do you feel today?</span> What side of your interests do you want
-          to lean into — just for now, not forever? Pick a few threads below; Metaphors and Deep Dive listen, and your
-          ratings keep teaching the wardrobe what fits.
+        <p className="max-w-prose text-[15px] leading-[1.65] text-[#5c5550] sm:text-base">
+          Dress the thought you&apos;re in <span className="italic text-[#8B7355]">right now</span> — not a lifetime
+          label. Tap a thread; Metaphor and Deep Dive follow. Your ratings teach what deserves to stay.
         </p>
       </div>
 

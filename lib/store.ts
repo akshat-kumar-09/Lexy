@@ -1,11 +1,16 @@
 "use client";
 
-import { migrateLegacyDailyRows, normalizeLexiconPayload } from "@/lib/lexiconMigrate";
-import type { LexiconData, LexiconWord, MetaphorDayEntry } from "@/lib/types";
+import { normalizeLexiconPayload } from "@/lib/lexiconMigrate";
+import type {
+  LexiconData,
+  LexiconWord,
+  MetaphorDayEntry,
+  ScribbleRewriteEntry,
+} from "@/lib/types";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
-const empty: LexiconData = { words: {}, metaphor_history: [] };
+const empty: LexiconData = { words: {}, metaphor_history: [], scribble_rewrites: [] };
 
 export interface SettingsState {
   openaiApiKey: string;
@@ -26,6 +31,7 @@ interface LexiconStore extends LexiconData {
   upsertWord: (w: LexiconWord) => void;
   updateRating: (wordKey: string, rating: number) => void;
   appendMetaphor: (entry: MetaphorDayEntry) => void;
+  appendScribbleRewrite: (entry: ScribbleRewriteEntry) => void;
   importLexicon: (data: LexiconData) => void;
   exportText: () => string;
   exportLexiconJson: () => string;
@@ -56,10 +62,15 @@ export const useLexicon = create<LexiconStore>()(
           const rest = s.metaphor_history.filter((h) => h.date !== entry.date);
           return { metaphor_history: [...rest, entry] };
         }),
+      appendScribbleRewrite: (entry) =>
+        set((s) => ({
+          scribble_rewrites: [entry, ...s.scribble_rewrites].slice(0, 80),
+        })),
       importLexicon: (data) =>
         set({
           words: data.words ?? {},
           metaphor_history: data.metaphor_history ?? [],
+          scribble_rewrites: data.scribble_rewrites ?? [],
         }),
       exportText: () => {
         const words = get().words;
@@ -72,8 +83,8 @@ export const useLexicon = create<LexiconStore>()(
           .join("\n---\n\n");
       },
       exportLexiconJson: () => {
-        const { words, metaphor_history } = get();
-        return JSON.stringify({ words, metaphor_history }, null, 2);
+        const { words, metaphor_history, scribble_rewrites } = get();
+        return JSON.stringify({ words, metaphor_history, scribble_rewrites }, null, 2);
       },
     }),
     {
@@ -82,6 +93,7 @@ export const useLexicon = create<LexiconStore>()(
       partialize: (s) => ({
         words: s.words,
         metaphor_history: s.metaphor_history,
+        scribble_rewrites: s.scribble_rewrites,
       }),
       merge: (persistedState, currentState) => {
         const p = persistedState as
@@ -89,22 +101,18 @@ export const useLexicon = create<LexiconStore>()(
           | null
           | undefined;
         if (!p || typeof p !== "object") return currentState;
-        const words =
-          p.words && typeof p.words === "object"
-            ? (p.words as LexiconData["words"])
-            : currentState.words;
-        let metaphor_history: MetaphorDayEntry[] = currentState.metaphor_history;
-        if (Array.isArray(p.metaphor_history)) {
-          metaphor_history = migrateLegacyDailyRows(p.metaphor_history);
-        } else if (Array.isArray(p.daily_history)) {
-          metaphor_history = migrateLegacyDailyRows(p.daily_history);
-        } else if (!Array.isArray(p.metaphor_history)) {
-          metaphor_history = [];
-        }
+        const normalized = normalizeLexiconPayload({
+          words: (p.words && typeof p.words === "object" ? p.words : currentState.words) as LexiconData["words"],
+          metaphor_history: p.metaphor_history,
+          daily_history: p.daily_history,
+          scribble_rewrites: p.scribble_rewrites,
+        });
+        if (!normalized) return currentState;
         return {
           ...currentState,
-          words,
-          metaphor_history,
+          words: normalized.words,
+          metaphor_history: normalized.metaphor_history,
+          scribble_rewrites: normalized.scribble_rewrites,
         };
       },
     }
