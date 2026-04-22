@@ -17,23 +17,26 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Git
+## Git & GitHub
 
-From this folder:
+This folder is a git repo on branch `main`. Do not commit `.env.local` — it is ignored.
+
+Create a new empty repository on [GitHub](https://github.com/new), then:
 
 ```bash
-git init
-git add .
-git commit -m "Initial commit"
+git remote add origin https://github.com/YOUR_USER/YOUR_REPO.git
+git push -u origin main
 ```
-
-Create a repository on GitHub (or similar), add `origin`, and push. Do not commit `.env.local` — it is already ignored.
 
 ## Deploy (e.g. Vercel)
 
-1. Push the repo and import the project in [Vercel](https://vercel.com).
-2. Set environment variables: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `DATABASE_URL` (same values as local).
-3. Deploy. You get a `*.vercel.app` URL with no custom domain required.
+1. Push the repo and **Import** it in the [Vercel dashboard](https://vercel.com/new).
+2. **Environment variables** (Project → Settings → Environment Variables), for Production (and Preview if you use Clerk there too):
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+   - `DATABASE_URL` (Neon pooled connection string)
+3. In [Clerk](https://dashboard.clerk.com) → your application → **Domains**, add your Vercel URL (e.g. `https://your-app.vercel.app`) so sign-in and redirects work in production.
+4. Deploy. You get a `*.vercel.app` URL; a custom domain is optional.
 
 ## Data & privacy
 
