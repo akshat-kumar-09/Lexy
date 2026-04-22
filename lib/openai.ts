@@ -1,0 +1,303 @@
+import { genreContextForPrompt } from "@/lib/genres";
+import type {
+  DailyWordEntry,
+  DeepDiveResult,
+  LexiconWord,
+  ScribbleAnalysis,
+  TasteGridResponse,
+  TasteGridWord,
+} from "@/lib/types";
+
+/** Same-origin proxy avoids browser CORS blocks on api.openai.com */
+const CHAT = "/api/openai/chat";
+
+async function chatJson<T>(
+  apiKey: string,
+  model: string,
+  system: string,
+  user: string,
+  temperature = 0.4
+): Promise<T> {
+  const res = await fetch(CHAT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      apiKey,
+      model,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature,
+      response_format: { type: "json_object" },
+    }),
+  });
+
+  const rawText = await res.text();
+  let data: {
+    error?: { message?: string };
+    choices?: { message?: { content?: string } }[];
+  };
+  try {
+    data = JSON.parse(rawText) as typeof data;
+  } catch {
+    throw new Error(rawText.slice(0, 280) || `OpenAI error ${res.status}`);
+  }
+
+  if (!res.ok) {
+    const msg = data.error?.message ?? rawText.slice(0, 280);
+    throw new Error(msg || `OpenAI error ${res.status}`);
+  }
+
+  const raw = data.choices?.[0]?.message?.content;
+  if (!raw) throw new Error("Empty response from model");
+  return JSON.parse(raw) as T;
+}
+
+export async function readHandwriting(
+  apiKey: string,
+  base64: string,
+  mediaType: string
+): Promise<string> {
+  const res = await fetch(CHAT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      apiKey,
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Read this handwritten text exactly as written. Preserve punctuation, line breaks, and voice. Output plain text only — no preamble.",
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mediaType};base64,${base64}`,
+                detail: "high",
+              },
+            },
+          ],
+        },
+      ],
+      max_tokens: 4000,
+    }),
+  });
+  const rawText = await res.text();
+  let data: {
+    error?: { message?: string };
+    choices?: { message?: { content?: string } }[];
+  };
+  try {
+    data = JSON.parse(rawText) as typeof data;
+  } catch {
+    throw new Error(rawText.slice(0, 280) || `Vision error ${res.status}`);
+  }
+  if (!res.ok) {
+    throw new Error(data.error?.message ?? `Vision error ${res.status}`);
+  }
+  const text = data.choices?.[0]?.message?.content?.trim();
+  if (!text) throw new Error("Could not read handwriting");
+  return text;
+}
+
+const SCRIBBLE_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
+Analyse the user's morning writing and return ONLY valid JSON matching this shape:
+{
+  "upgraded_version": "string — full text rewritten in richer, more precise language; same voice, elevated expression",
+  "word_upgrades": [
+    {
+      "original_phrase": "string",
+      "upgraded_word": "string",
+      "pronunciation": "IPA in slashes like /wɜːd/",
+      "why": "why this upgrade sharpens the line"
+    }
+  ],
+  "key_idea_expansions": [
+    { "idea": "short label", "expansion": "beautiful expansion in 2-4 sentences" }
+  ],
+  "vocabulary_candidates": [
+    {
+      "word": "lowercase lemma",
+      "pronunciation": "IPA",
+      "part_of_speech": "noun|verb|adjective|etc",
+      "definition": "clear definition",
+      "example_sentence": "example in their voice",
+      "origin": "etymology, concise",
+      "why_relevant": "This one felt right for you because…"
+    }
+  ]
+}
+Rules:
+- word_upgrades: exactly 4 or 5 items (pick the best four or five spots).
+- key_idea_expansions: 1 or 2 items.
+- vocabulary_candidates: 5 or 6 words tied to their themes; every word MUST include IPA pronunciation.
+- Keep their voice in upgraded_version; do not sound generic.`;
+
+export async function analyseScribble(
+  apiKey: string,
+  text: string
+): Promise<ScribbleAnalysis> {
+  return chatJson<ScribbleAnalysis>(
+    apiKey,
+    "gpt-4o-mini",
+    SCRIBBLE_SYSTEM,
+    `Morning scribble:\n\n${text}`
+  );
+}
+
+export async function generateDailyWord(
+  apiKey: string,
+  lexicon: Record<string, LexiconWord>,
+  genreIds: string[] = []
+): Promise<Omit<DailyWordEntry, "date">> {
+  const keys = Object.keys(lexicon).slice(0, 40);
+  const known = keys.length
+    ? keys.join(", ")
+    : "none yet — infer taste from general literary sensibility";
+
+  const genreBlock = genreContextForPrompt(genreIds);
+
+  const system = `You are Lexy. Return ONLY valid JSON:
+{
+  "word": "lemma",
+  "pronunciation": "IPA with slashes",
+  "part_of_speech": "string",
+  "definition": "full definition",
+  "example_sentences": ["three distinct example sentences, literary but natural"],
+  "origin": "etymology",
+  "usage_challenge": "one short challenge for the day — warm, not bossy",
+  "why_today": "one sentence: why this word for this reader today"
+}
+Every string field must be present. example_sentences must have exactly 3 items. Pronunciation is mandatory.`;
+
+  const user = `Words this person already treasures: ${known}
+${genreBlock}
+Pick ONE word for today — not random, but tuned to their aesthetic and gaps. It should feel like opening the right page in a rare book.
+If interest lenses are given, the word should clearly belong to at least one of those worlds (or bridge two) while still fitting their ratings.`;
+
+  return chatJson<Omit<DailyWordEntry, "date">>(
+    apiKey,
+    "gpt-4o-mini",
+    system,
+    user,
+    0.65
+  );
+}
+
+function lexiconTastePayload(lexicon: Record<string, LexiconWord>): string {
+  const rows = Object.values(lexicon)
+    .sort((a, b) => b.rating - a.rating)
+    .map((w) => `${w.word}: ${w.rating}`);
+  return rows.length ? rows.join("\n") : "(empty — infer a literary, curious reader)";
+}
+
+/**
+ * Exactly 25 words tailored to current ratings. Excludes words already in the lexicon.
+ * Call again after each rating so the grid reflects refined taste.
+ */
+export async function generateTasteGrid(
+  apiKey: string,
+  lexicon: Record<string, LexiconWord>,
+  context?: { lastRatedWord?: string; lastRating?: number },
+  genreIds: string[] = []
+): Promise<TasteGridResponse> {
+  const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
+  const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
+
+  const genreBlock = genreContextForPrompt(genreIds);
+
+  const system = `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
+{
+  "suggestions": [
+    {
+      "word": "lemma",
+      "pronunciation": "IPA with slashes — mandatory on every word",
+      "part_of_speech": "noun|verb|adjective|etc",
+      "definition": "one concise line (max ~18 words)",
+      "why_for_you": "one short line: why this word fits their emerging taste (not generic)"
+    }
+  ]
+}
+Rules:
+- suggestions must contain EXACTLY 25 items.
+- Every word MUST have IPA pronunciation in slashes.
+- Do not include any word the user already has in their lexicon (case-insensitive match on lemma).
+- Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
+- Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
+- Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
+- If interest lenses are provided in the user message, at least half the suggestions should clearly evoke those worlds (spread across the chosen lenses), while the rest can bridge outward so the grid still feels varied.`;
+
+  const last =
+    context?.lastRatedWord && context.lastRating != null
+      ? `They just rated "${context.lastRatedWord}" at ${context.lastRating}/10 — let that inform the next grid.\n`
+      : "";
+
+  const user = `${last}Words already in their lexicon (do NOT suggest these again): ${excludeList}
+
+Their lexicon with ratings (higher = more love):
+${lexiconTastePayload(lexicon)}
+${genreBlock}
+Generate 25 NEW words for the grid — this grid is how Lexy learns and mirrors their taste. Refresh the palette: new lemmas only, tuned to what the ratings imply.`;
+
+  const raw = await chatJson<{ suggestions: TasteGridWord[] }>(
+    apiKey,
+    "gpt-4o-mini",
+    system,
+    user,
+    0.75
+  );
+
+  const suggestions = Array.isArray(raw.suggestions) ? raw.suggestions : [];
+  const filtered = suggestions.filter((s) => s.word && !exclude.has(s.word.toLowerCase().trim()));
+  if (filtered.length < 25) {
+    const need = 25 - filtered.length;
+    const fill = await chatJson<{ suggestions: TasteGridWord[] }>(
+      apiKey,
+      "gpt-4o-mini",
+      `${system}\nThe previous reply had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
+      `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${genreBlock}`,
+      0.7
+    );
+    for (const s of fill.suggestions ?? []) {
+      if (filtered.length >= 25) break;
+      const k = s.word?.toLowerCase().trim();
+      if (k && !exclude.has(k) && !filtered.some((x) => x.word.toLowerCase() === k)) filtered.push(s);
+    }
+  }
+
+  return { suggestions: filtered.slice(0, 25) };
+}
+
+export async function deepDiveWord(
+  apiKey: string,
+  word: string
+): Promise<DeepDiveResult> {
+  const system = `You are Lexy. Return ONLY valid JSON:
+{
+  "word": "the word",
+  "pronunciation": "IPA with slashes",
+  "part_of_speech": "string",
+  "definition": "precise definition",
+  "nuance": "what this word captures that near-synonyms do not",
+  "example_sentences": ["three sentences"],
+  "origin": "etymology",
+  "related_words": ["three related words"],
+  "used_by": "a memorable literary appearance — author or work"
+}
+All fields required. example_sentences length 3. related_words length 3. Pronunciation mandatory.`;
+
+  return chatJson<DeepDiveResult>(
+    apiKey,
+    "gpt-4o-mini",
+    system,
+    `Full story of the word: "${word.trim()}"`
+  );
+}
