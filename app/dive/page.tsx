@@ -11,6 +11,7 @@ import { tasteRatingsLine } from "@/lib/lexyCopy";
 import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
 import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function DivePage() {
@@ -116,6 +117,16 @@ export default function DivePage() {
     setGridNonce((n) => n + 1);
   }
 
+  function closeDiveDetail() {
+    if (loadingDive) return;
+    setResult(null);
+    setSelectedFromGrid(null);
+    setError(null);
+  }
+
+  const detailOpen = Boolean(loadingDive || result);
+  useBodyScrollLock(detailOpen);
+
   return (
     <div className="mx-auto max-w-3xl space-y-10 pb-8">
       <div>
@@ -186,14 +197,44 @@ export default function DivePage() {
         )}
       </section>
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {(loadingDive || result) && (
-          <motion.section
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="space-y-5 border-t border-[#EDE8E0] pt-8"
-          >
+          <>
+            <motion.div
+              key="dive-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[100] bg-[#1C1917]/35 backdrop-blur-[2px] md:hidden"
+              onClick={closeDiveDetail}
+              aria-hidden
+            />
+            <motion.section
+              key="dive-panel"
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              className="space-y-5 border-[#EDE8E0] max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-[110] max-md:max-h-[min(92dvh,calc(100dvh-3.5rem))] max-md:overflow-y-auto max-md:overflow-x-hidden max-md:rounded-t-2xl max-md:border max-md:border-b-0 max-md:bg-[#FEFCF8] max-md:px-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:pt-3 max-md:shadow-[0_-12px_40px_rgba(0,0,0,0.14)] md:relative md:border-t md:pt-8"
+              role="dialog"
+              aria-modal="true"
+              aria-label={loadingDive ? "Loading word details" : result ? `Details for ${result.word}` : "Word details"}
+            >
+              <div className="relative flex h-11 shrink-0 items-center border-b border-[#F5F0EA] md:hidden">
+                <div className="pointer-events-none absolute inset-x-0 flex justify-center pt-2">
+                  <div className="h-1 w-10 rounded-full bg-[#D4CCC0]" aria-hidden />
+                </div>
+                <button
+                  type="button"
+                  onClick={closeDiveDetail}
+                  disabled={loadingDive}
+                  className="relative z-10 ml-auto min-h-10 shrink-0 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.1em] text-[#8B7355] active:bg-[#F5EFE0] disabled:opacity-40"
+                >
+                  Close
+                </button>
+              </div>
+
             {loadingDive && (
               <p className="font-serif text-sm italic text-[#8B7355]">Opening the page on this word…</p>
             )}
@@ -209,7 +250,9 @@ export default function DivePage() {
                 <div className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-6 shadow-sm">
                   <AddWordBurst show={burst} />
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">{result.word}</h2>
+                    <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">
+                      {result.word}
+                    </h2>
                     <PronounceButton word={result.word} />
                   </div>
                   <IPA className="mt-2 block">{result.pronunciation}</IPA>
@@ -276,7 +319,8 @@ export default function DivePage() {
                 </div>
               </div>
             )}
-          </motion.section>
+            </motion.section>
+          </>
         )}
       </AnimatePresence>
 

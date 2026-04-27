@@ -9,6 +9,7 @@ import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/st
 import type { MetaphorGridItem } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useEffect, useMemo, useState } from "react";
 
 export default function MetaphorsPage() {
@@ -100,6 +101,13 @@ export default function MetaphorsPage() {
 
   const list = todays?.suggestions ?? [];
 
+  function closeMetaphorDetail() {
+    setSelected(null);
+  }
+
+  const metaphorDetailOpen = Boolean(selected);
+  useBodyScrollLock(metaphorDetailOpen);
+
   return (
     <div className="mx-auto max-w-3xl space-y-8 pb-8">
       <div>
@@ -167,14 +175,43 @@ export default function MetaphorsPage() {
         </section>
       )}
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence>
         {selected && (
-          <motion.section
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="space-y-5 border-t border-[#EDE8E0] pt-8"
-          >
+          <>
+            <motion.div
+              key="metaphor-backdrop"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[100] bg-[#1C1917]/35 backdrop-blur-[2px] md:hidden"
+              onClick={closeMetaphorDetail}
+              aria-hidden
+            />
+            <motion.section
+              key="metaphor-panel"
+              initial={{ opacity: 0, y: 28 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 420, damping: 34 }}
+              className="space-y-5 border-[#EDE8E0] max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-[110] max-md:max-h-[min(92dvh,calc(100dvh-3.5rem))] max-md:overflow-y-auto max-md:overflow-x-hidden max-md:rounded-t-2xl max-md:border max-md:border-b-0 max-md:bg-[#FEFCF8] max-md:px-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:pt-3 max-md:shadow-[0_-12px_40px_rgba(0,0,0,0.14)] md:relative md:border-t md:pt-8"
+              role="dialog"
+              aria-modal="true"
+              aria-label={`Metaphor: ${selected.metaphor}`}
+            >
+              <div className="relative flex h-11 shrink-0 items-center border-b border-[#F5F0EA] md:hidden">
+                <div className="pointer-events-none absolute inset-x-0 flex justify-center pt-2">
+                  <div className="h-1 w-10 rounded-full bg-[#D4CCC0]" aria-hidden />
+                </div>
+                <button
+                  type="button"
+                  onClick={closeMetaphorDetail}
+                  className="relative z-10 ml-auto min-h-10 shrink-0 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.1em] text-[#8B7355] active:bg-[#F5EFE0]"
+                >
+                  Close
+                </button>
+              </div>
+
             <div className="relative overflow-hidden rounded-[1.35rem] bg-[#1C1917] px-4 py-8 shadow-xl sm:px-6 sm:py-10">
               <AddWordBurst show={burst} />
               <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8B7355]">Chosen image</p>
@@ -215,13 +252,14 @@ export default function MetaphorsPage() {
               </p>
               <button
                 type="button"
-                onClick={() => setSelected(null)}
-                className="mt-4 w-full rounded-full border border-[#EDE8E0] py-2.5 text-sm text-[#6A6360] hover:border-[#8B7355]/40"
+                onClick={closeMetaphorDetail}
+                className="mt-4 w-full rounded-full border border-[#EDE8E0] py-2.5 text-sm text-[#6A6360] hover:border-[#8B7355]/40 md:mt-4"
               >
                 Back to grid
               </button>
             </div>
-          </motion.section>
+            </motion.section>
+          </>
         )}
       </AnimatePresence>
     </div>
