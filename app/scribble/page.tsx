@@ -6,6 +6,7 @@ import { RatingDial } from "@/components/RatingDial";
 import { ScribbleLexiconSidebar } from "@/components/ScribbleLexiconSidebar";
 import { analyseScribble, readHandwriting } from "@/lib/openai";
 import { playLexiconChime } from "@/lib/sound";
+import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
 import { useLexicon, useSettings, todayISODate } from "@/lib/store";
 import type { ScribbleAnalysis, VocabularyCandidate } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -152,10 +153,17 @@ export default function ScribblePage() {
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Morning Scribble</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
-          Upload a page from your journal or paste what you wrote. Lexy reads it, lifts the language, and finds words
-          that fit the way you think.
+          Upload a page from your journal or paste what you wrote. Lexy reshapes the draft so you can express it more
+          clearly afterward — and surfaces words worth keeping.
         </p>
       </div>
+
+      {!apiKey && (
+        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>Add your OpenAI API key in Settings to read handwriting and analyse your writing.</p>
+          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
+        </div>
+      )}
 
       {recentRewrites.length > 0 && (
         <section className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0]/80 p-4 sm:p-5">
@@ -358,7 +366,9 @@ export default function ScribblePage() {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">
                 Words that felt right for you
               </h2>
-              <p className="text-sm italic text-[#8B7355]">Rate each word, then add it to your lexicon. 7.7+ becomes a favourite.</p>
+              <p className="text-sm italic text-[#8B7355]">
+                Rate each word, then add it to your lexicon. {FAVOURITE_THRESHOLD}+ becomes a favourite.
+              </p>
               <div className="space-y-4">
                 {result.vocabulary_candidates.map((c) => {
                   const key = c.word.toLowerCase();

@@ -4,9 +4,8 @@ import { IPA } from "@/components/IPA";
 import { RatingDial } from "@/components/RatingDial";
 import { useLexicon } from "@/lib/store";
 import type { LexiconWord } from "@/lib/types";
+import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 import { useEffect, useMemo, useState } from "react";
-
-const FAVOURITE_THRESHOLD = 7.7;
 
 export default function LexiconPage() {
   const words = useLexicon((s) => s.words);

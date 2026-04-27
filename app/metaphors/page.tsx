@@ -8,13 +8,12 @@ import { playLexiconChime } from "@/lib/sound";
 import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
 import type { MetaphorGridItem } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
+import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
 import { useEffect, useMemo, useState } from "react";
-
-const FAVOURITE_THRESHOLD = 7.7;
 
 export default function MetaphorsPage() {
   const apiKey = useSettings((s) => s.openaiApiKey);
-  const genreIds = useTasteProfile((s) => s.genreIds);
+  const explorationThreads = useTasteProfile((s) => s.threads);
   const metaphor_history = useLexicon((s) => s.metaphor_history);
   const appendMetaphor = useLexicon((s) => s.appendMetaphor);
   const upsertWord = useLexicon((s) => s.upsertWord);
@@ -55,7 +54,7 @@ export default function MetaphorsPage() {
         const fromToday = cur?.suggestions.map((s) => s.metaphor) ?? [];
         const exclude = [...new Set([...fromLex, ...fromToday])];
 
-        const g = await generateMetaphorGrid(apiKey, w, genreIds, exclude);
+        const g = await generateMetaphorGrid(apiKey, w, explorationThreads, exclude);
         if (cancelled) return;
         appendMetaphor({ date: today, suggestions: g.suggestions });
       } catch (e) {
@@ -68,7 +67,7 @@ export default function MetaphorsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiKey, today, gridNonce, genreIds, appendMetaphor]);
+  }, [apiKey, today, gridNonce, explorationThreads, appendMetaphor]);
 
   function refreshGrid() {
     setGridNonce((n) => n + 1);
@@ -114,9 +113,10 @@ export default function MetaphorsPage() {
       <GenreStrip compact />
 
       {!apiKey && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Add your OpenAI API key in Settings to load metaphors.
-        </p>
+        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>Add your OpenAI API key in Settings to load metaphors.</p>
+          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
+        </div>
       )}
 
       {error && (

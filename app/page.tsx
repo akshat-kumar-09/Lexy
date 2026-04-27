@@ -1,32 +1,36 @@
+import { FirstTimeBanner } from "@/components/FirstTimeBanner";
 import { LexyHomePreview } from "@/components/LexyHomePreview";
+import { FAVOURITE_THRESHOLD, HOME_HERO_SUPPORT, LEXICON_NOD } from "@/lib/lexyCopy";
 import Link from "next/link";
 
 const cards = [
   {
     href: "/dive",
     title: "Word Deep Dive",
-    line: "Twenty-five words at a time — tuned to your lexicon and what you feel like exploring today. Rate to teach Lexy what you love.",
+    line: "Twenty-five words — rate each one and Lexy learns what you love. Your threads nudge the next batch.",
   },
   {
     href: "/metaphors",
     title: "Metaphors",
-    line: "Ten images at a time — open one, rate it, save it. 7.7+ becomes a favourite, same as everywhere else.",
+    line: `Ten images at a time — rate them the same way. ${FAVOURITE_THRESHOLD}+ becomes a lexicon favourite.`,
   },
   {
     href: "/lexicon",
     title: "My Lexy",
-    line: "Your lexicon, sorted by love, ready to export — the spine of how everything else learns you.",
+    line: "Every word you keep, sorted by how much you loved it — the spine Lexy uses to read your taste.",
   },
   {
     href: "/scribble",
     title: "Morning Scribble",
-    line: "A photo or a paragraph — Lexy reads you back to yourself, richer.",
+    line: "Scribble raw thoughts (or a photo); Lexy reshapes them so you can say it better afterward.",
   },
 ];
 
 export default function HomePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-7 sm:space-y-9 md:space-y-10">
+      <FirstTimeBanner />
+
       <div className="space-y-2.5 sm:space-y-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8B7355] sm:text-xs">Welcome</p>
         <h1 className="font-serif text-[1.6rem] font-normal italic leading-[1.2] tracking-tight text-[#1C1917] sm:text-3xl md:text-4xl md:leading-tight">
@@ -35,10 +39,8 @@ export default function HomePage() {
         <p className="font-serif text-[1.35rem] font-normal italic leading-[1.25] tracking-tight text-[#1C1917] sm:text-2xl md:text-3xl">
           Lexy is your wardrobe.
         </p>
-        <p className="max-w-prose text-[15px] leading-[1.65] text-[#5c5550] sm:text-base">
-          Dress the thought you&apos;re in <span className="italic text-[#8B7355]">right now</span> — not a lifetime
-          label. Tap a thread; Metaphor and Deep Dive follow. Your ratings teach what deserves to stay.
-        </p>
+        <p className="text-[13px] font-medium leading-snug text-[#8B7355] sm:text-sm">{LEXICON_NOD}</p>
+        <p className="max-w-prose text-[15px] leading-[1.65] text-[#5c5550] sm:text-base">{HOME_HERO_SUPPORT}</p>
       </div>
 
       <LexyHomePreview />
@@ -55,6 +57,13 @@ export default function HomePage() {
           </Link>
         ))}
       </div>
+
+      <p className="text-center text-xs text-[#B0A898]">
+        New to Lexy?{" "}
+        <Link href="/start" className="font-semibold text-[#8B7355] underline-offset-2 hover:underline">
+          Get started
+        </Link>
+      </p>
     </div>
   );
 }

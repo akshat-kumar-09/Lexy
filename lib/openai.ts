@@ -1,4 +1,4 @@
-import { genreContextForPrompt } from "@/lib/genres";
+import { threadsContextForPrompt } from "@/lib/threads";
 import type {
   DeepDiveResult,
   LexiconWord,
@@ -159,7 +159,7 @@ export async function analyseScribble(
 export async function generateMetaphorGrid(
   apiKey: string,
   lexicon: Record<string, LexiconWord>,
-  genreIds: string[] = [],
+  explorationThreads: string[] = [],
   excludeMetaphors: string[] = []
 ): Promise<MetaphorGridResponse> {
   const keys = Object.keys(lexicon).slice(0, 40);
@@ -167,7 +167,7 @@ export async function generateMetaphorGrid(
     ? keys.join(", ")
     : "none yet — infer a thoughtful, image-minded reader";
 
-  const genreBlock = genreContextForPrompt(genreIds);
+  const threadBlock = threadsContextForPrompt(explorationThreads);
   const excludeSet = new Set(excludeMetaphors.map((m) => m.toLowerCase().trim()).filter(Boolean));
   const excludeList = [...excludeSet].slice(0, 120).join(", ") || "(none)";
 
@@ -179,7 +179,7 @@ export async function generateMetaphorGrid(
       "unpacking": "plain language: what the image means",
       "image_strength": "one sentence: why this image lands",
       "example_sentences": ["three natural sentences using or alluding to this metaphor"],
-      "why_for_you": "one short line: why this fits their taste and today's threads"
+      "why_for_you": "one short line: why this fits their taste and their exploration themes"
     }
   ]
 }
@@ -190,10 +190,10 @@ Rules:
 - Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).`;
 
   const user = `They already keep these words/phrases: ${known}
-${genreBlock}
+${threadBlock}
 Already shown or saved today (do NOT repeat these images): ${excludeList}
 
-Return 10 NEW wearable metaphors — fresh, specific; clichés only if subverted. Spread across varied images while still coherent with their lexicon and today's threads.`;
+Return 10 NEW wearable metaphors — fresh, specific; clichés only if subverted. Spread across varied images while still coherent with their lexicon and any exploration themes they named.`;
 
   const raw = await chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system, user, 0.72);
 
@@ -208,7 +208,7 @@ Return 10 NEW wearable metaphors — fresh, specific; clichés only if subverted
       apiKey,
       "gpt-4o-mini",
       `${system}\nThe previous reply had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
-      `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${genreBlock}`,
+      `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
       0.68
     );
     for (const s of fill.suggestions ?? []) {
@@ -238,12 +238,12 @@ export async function generateTasteGrid(
   apiKey: string,
   lexicon: Record<string, LexiconWord>,
   context?: { lastRatedWord?: string; lastRating?: number },
-  genreIds: string[] = []
+  explorationThreads: string[] = []
 ): Promise<TasteGridResponse> {
   const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
   const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
 
-  const genreBlock = genreContextForPrompt(genreIds);
+  const threadBlock = threadsContextForPrompt(explorationThreads);
 
   const system = `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
 {
@@ -264,7 +264,7 @@ Rules:
 - Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
 - Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
-- If today's threads are provided in the user message, at least half the suggestions should clearly evoke those worlds (spread across the chosen threads), while the rest can bridge outward so the grid still feels varied.`;
+- If user-chosen exploration themes are provided in the user message, at least half the suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the grid still feels varied.`;
 
   const last =
     context?.lastRatedWord && context.lastRating != null
@@ -275,7 +275,7 @@ Rules:
 
 Their lexicon with ratings (higher = more love):
 ${lexiconTastePayload(lexicon)}
-${genreBlock}
+${threadBlock}
 Generate 25 NEW words for the grid — this grid is how Lexy learns and mirrors their taste. Refresh the palette: new lemmas only, tuned to what the ratings imply.`;
 
   const raw = await chatJson<{ suggestions: TasteGridWord[] }>(
@@ -294,7 +294,7 @@ Generate 25 NEW words for the grid — this grid is how Lexy learns and mirrors 
       apiKey,
       "gpt-4o-mini",
       `${system}\nThe previous reply had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
-      `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${genreBlock}`,
+      `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${threadBlock}`,
       0.7
     );
     for (const s of fill.suggestions ?? []) {

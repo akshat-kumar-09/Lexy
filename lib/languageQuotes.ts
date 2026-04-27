@@ -1,7 +1,7 @@
 /** One inspiring line per main route — the weight of good language. */
 
 const DEFAULT =
-  "Care in language is care in thought: the right word is a small act of precision, and precision is a kind of love.";
+  "Expression deepens by wearing language, not only studying it — every choice you keep teaches the next sentence.";
 
 export const ESSENCE_BY_PATH: Record<string, string> = {
   "/":
@@ -14,6 +14,8 @@ export const ESSENCE_BY_PATH: Record<string, string> = {
     "A lexicon you curate is a portrait of your mind: what you keep close is what you are willing to see clearly.",
   "/scribble":
     "First thoughts deserve second sight — revision is not betrayal of voice; it is loyalty to what you almost said.",
+  "/start":
+    "A little setup now saves a thousand explanations later — let the taps teach what words alone would bury.",
   "/settings":
     "The tools we choose for language shape the thoughts we can have; tending them is tending the inner life.",
   "/sign-in":
@@ -27,5 +29,6 @@ export function getEssenceLine(pathname: string | null): string {
   const key = pathname.replace(/\/$/, "") || "/";
   if (key.startsWith("/sign-in")) return ESSENCE_BY_PATH["/sign-in"]!;
   if (key.startsWith("/sign-up")) return ESSENCE_BY_PATH["/sign-up"]!;
+  if (key.startsWith("/start")) return ESSENCE_BY_PATH["/start"]!;
   return ESSENCE_BY_PATH[key] ?? DEFAULT;
 }

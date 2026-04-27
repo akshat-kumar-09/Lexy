@@ -7,6 +7,7 @@ import { PronounceButton } from "@/components/PronounceButton";
 import { RatingDial } from "@/components/RatingDial";
 import { deepDiveWord, generateTasteGrid } from "@/lib/openai";
 import { playLexiconChime } from "@/lib/sound";
+import { tasteRatingsLine } from "@/lib/lexyCopy";
 import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
 import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -14,7 +15,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export default function DivePage() {
   const apiKey = useSettings((s) => s.openaiApiKey);
-  const genreIds = useTasteProfile((s) => s.genreIds);
+  const explorationThreads = useTasteProfile((s) => s.threads);
   const upsertWord = useLexicon((s) => s.upsertWord);
 
   const [suggestions, setSuggestions] = useState<TasteGridWord[]>([]);
@@ -43,7 +44,7 @@ export default function DivePage() {
       const words = useLexicon.getState().words;
       const ctx = lastRatedRef.current ?? undefined;
       lastRatedRef.current = null;
-      const g = await generateTasteGrid(apiKey, words, ctx, genreIds);
+      const g = await generateTasteGrid(apiKey, words, ctx, explorationThreads);
       setSuggestions(g.suggestions);
     } catch (e) {
       setGridError(e instanceof Error ? e.message : "Could not refresh suggestions");
@@ -51,12 +52,12 @@ export default function DivePage() {
     } finally {
       setGridLoading(false);
     }
-  }, [apiKey, genreIds]);
+  }, [apiKey, explorationThreads]);
 
   useEffect(() => {
     if (!apiKey) return;
     void loadGrid();
-  }, [apiKey, gridNonce, loadGrid, genreIds]);
+  }, [apiKey, gridNonce, loadGrid, explorationThreads]);
 
   async function openDive(lemma: string, hint?: TasteGridWord | null) {
     if (!apiKey) {
@@ -121,7 +122,7 @@ export default function DivePage() {
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Word Deep Dive</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
           Twenty-five words picked for your taste — the set turns over each time you rate one, and Lexy leans into what
-          you love. Today&apos;s threads (above) steer the palette; tomorrow you can choose different ones. Tap a word
+          you love. Your threads (above) steer the palette; change them anytime. Tap a word
           for the full story; IPA is always in the room.
         </p>
       </div>
@@ -129,9 +130,10 @@ export default function DivePage() {
       <GenreStrip compact />
 
       {!apiKey && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Add your OpenAI API key in Settings to load your taste grid and dive into words.
-        </p>
+        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p>Add your OpenAI API key in Settings to load your taste grid and dive into words.</p>
+          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
+        </div>
       )}
 
       <section className="space-y-4">

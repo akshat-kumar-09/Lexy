@@ -1,6 +1,12 @@
 "use client";
 
 import { normalizeLexiconPayload } from "@/lib/lexiconMigrate";
+import {
+  MAX_EXPLORATION_THREADS,
+  migrateLegacyGenreIds,
+  normalizeThreadLabel,
+  normalizeThreadList,
+} from "@/lib/threads";
 import type {
   LexiconData,
   LexiconWord,
@@ -127,29 +133,70 @@ export function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-const MAX_GENRES = 5;
-
 interface TasteProfileState {
-  genreIds: string[];
-  toggleGenre: (id: string) => void;
-  clearGenres: () => void;
+  /** Free-text themes the user typed — steer Deep Dive & Metaphors */
+  threads: string[];
+  /** Add one or several threads (comma/semicolon separated). */
+  addThreadsFromInput: (raw: string) => void;
+  removeThread: (label: string) => void;
+  clearThreads: () => void;
 }
+
+type PersistedTaste = Partial<TasteProfileState> & { genreIds?: string[] };
 
 export const useTasteProfile = create<TasteProfileState>()(
   persist(
     (set) => ({
-      genreIds: [],
-      toggleGenre: (id) =>
+      threads: [],
+      addThreadsFromInput: (raw) => {
+        const parts = raw
+          .split(/[,;\n]+/)
+          .map((s) => normalizeThreadLabel(s))
+          .filter(Boolean);
+        if (!parts.length) return;
         set((s) => {
-          const has = s.genreIds.includes(id);
-          if (has) return { genreIds: s.genreIds.filter((x) => x !== id) };
-          if (s.genreIds.length >= MAX_GENRES) return s;
-          return { genreIds: [...s.genreIds, id] };
-        }),
-      clearGenres: () => set({ genreIds: [] }),
+          const seen = new Set(s.threads.map((t) => t.toLowerCase()));
+          const next = [...s.threads];
+          for (const p of parts) {
+            const k = p.toLowerCase();
+            if (seen.has(k)) continue;
+            if (next.length >= MAX_EXPLORATION_THREADS) break;
+            seen.add(k);
+            next.push(p);
+          }
+          return { threads: next };
+        });
+      },
+      removeThread: (label) =>
+        set((s) => ({
+          threads: s.threads.filter((t) => t.toLowerCase() !== label.toLowerCase()),
+        })),
+      clearThreads: () => set({ threads: [] }),
     }),
-    { name: "lexy-taste", storage: createJSONStorage(() => localStorage) }
+    {
+      name: "lexy-taste",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ threads: s.threads }),
+      merge: (persistedState, currentState) => {
+        const p = persistedState as PersistedTaste | null | undefined;
+        if (!p || typeof p !== "object") return currentState;
+
+        let threads: string[] = currentState.threads;
+        if (Array.isArray(p.threads) && p.threads.length) {
+          threads = normalizeThreadList(p.threads);
+        } else if (Array.isArray(p.genreIds) && p.genreIds.length) {
+          threads = migrateLegacyGenreIds(p.genreIds);
+        }
+
+        return {
+          ...currentState,
+          threads: normalizeThreadList(threads),
+        };
+      },
+    }
   )
 );
 
-export { MAX_GENRES };
+/** @deprecated use MAX_EXPLORATION_THREADS */
+export const MAX_GENRES = MAX_EXPLORATION_THREADS;
+export { MAX_EXPLORATION_THREADS };

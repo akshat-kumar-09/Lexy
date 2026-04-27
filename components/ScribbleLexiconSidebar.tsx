@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { useLexicon } from "@/lib/store";
 import type { LexiconWord } from "@/lib/types";
 
-const FAVOURITE_THRESHOLD = 7.7;
+import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 
 export function ScribbleLexiconSidebar() {
   const words = useLexicon((s) => s.words);

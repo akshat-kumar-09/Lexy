@@ -3,7 +3,9 @@
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Link from "next/link";
 import { GenreStrip } from "@/components/GenreStrip";
+import { SetupGifs } from "@/components/SetupGifs";
 import { importLexiconFromUnknown, useLexicon, useSettings } from "@/lib/store";
+import { clearSetupHintDismissed } from "@/lib/setupStorage";
 import { useEffect, useRef, useState } from "react";
 
 const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
@@ -57,6 +59,26 @@ export default function SettingsPage() {
           your device.
         </p>
       </div>
+
+      <section id="setup" className="scroll-mt-24 space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Get started</h2>
+          <Link
+            href="/start"
+            className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8B7355] underline-offset-2 hover:underline"
+          >
+            Full-page guide
+          </Link>
+        </div>
+        <SetupGifs embedded />
+        <button
+          type="button"
+          onClick={() => clearSetupHintDismissed()}
+          className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8B7355] underline-offset-2 hover:underline"
+        >
+          Show &ldquo;First time?&rdquo; banner on home again
+        </button>
+      </section>
 
       <section className="space-y-3 rounded-2xl border border-[#EDE8E0] bg-white p-6">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Account</h2>
@@ -120,9 +142,10 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-6">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Taste & interests</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Exploration threads</h2>
         <p className="text-sm leading-relaxed text-[#6A6360]">
-          Today&apos;s threads steer Metaphors and Deep Dive — not a permanent box, just what you feel like now. Ratings still teach Lexy what to keep.
+          Name themes in your own words — Metaphors and Deep Dive orbit them for now. Ratings still teach Lexy what to
+          keep.
         </p>
         <GenreStrip />
       </section>

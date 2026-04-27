@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 import { Providers } from "@/components/Providers";
 import { DM_Sans, Libre_Baskerville } from "next/font/google";
 import "./globals.css";
@@ -21,8 +22,7 @@ const libre = Libre_Baskerville({
 
 export const metadata: Metadata = {
   title: "Lexy — your wardrobe for words",
-  description:
-    "Language is the dress of thought — Lexy is your wardrobe. Metaphors, deep dives, morning scribbles, and a lexicon that learns your taste — one day’s thread at a time.",
+  description: `Lexy (lexicon) learns your taste every time you rate a word. Deep Dive, Metaphors, and Morning Scribble — favourites from ${FAVOURITE_THRESHOLD} up live in your lexicon.`,
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
