@@ -56,13 +56,19 @@ export function normalizeThreadList(list: unknown): string[] {
   return out;
 }
 
-/** Rich examples so people see what “a thread” can mean — not presets, just imagination fuel. */
-export const THREAD_INSPIRATION_EXAMPLES: string[] = [
+/** Shown on the home preview card — Spirituality, Discipline, Wealth, Love, Beauty first. */
+export const THREAD_PREVIEW_HIGHLIGHTS = [
+  "Spirituality",
   "Discipline",
+  "Wealth",
+  "Love",
+  "Beauty",
+] as const;
+
+const THREAD_INSPIRATION_MORE: string[] = [
   "Spiritual Grammar",
   "Religious Grammar",
   "Greatness",
-  "Beauty",
   "Nature",
   "Consciousness",
   "Divinity",
@@ -83,7 +89,7 @@ export const THREAD_INSPIRATION_EXAMPLES: string[] = [
   "Starlight and scale",
   "Hardwork",
   "Music as prayer",
-  "ELements of nature",
+  "Elements of nature",
   "Modern love",
   "Startup exhaustion",
   "Soul and spirit",
@@ -94,6 +100,13 @@ export const THREAD_INSPIRATION_EXAMPLES: string[] = [
   "Code as craft",
   "Self Realisation",
 ];
+
+/** Rich examples so people see what “a thread” can mean — not presets, just imagination fuel. */
+export const THREAD_INSPIRATION_EXAMPLES: string[] = (() => {
+  const hl = new Set(THREAD_PREVIEW_HIGHLIGHTS.map((s) => s.toLowerCase()));
+  const rest = THREAD_INSPIRATION_MORE.filter((s) => !hl.has(s.toLowerCase()));
+  return [...THREAD_PREVIEW_HIGHLIGHTS, ...rest];
+})();
 
 /**
  * Text block appended to model prompts when the user named exploration threads.

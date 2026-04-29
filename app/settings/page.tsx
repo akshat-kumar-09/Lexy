@@ -55,8 +55,9 @@ export default function SettingsPage() {
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Settings</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
-          Your OpenAI key stays in this browser only — never sent to Lexy&apos;s servers. Lexy uses it to call OpenAI from
-          your device.
+          Your key is kept in this browser. When you&apos;re signed in, we also save it with your account (same secure
+          database as your lexicon) so it comes back after you close a tab or open Lexy on another device — you still
+          bring your own OpenAI usage; Lexy never uses a shared server key for you.
         </p>
       </div>
 
@@ -115,7 +116,7 @@ export default function SettingsPage() {
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">OpenAI API key</h2>
         <div className="space-y-2">
           <label htmlFor="key" className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
-            Key (local only)
+            Key (browser + account when signed in)
           </label>
           <input
             id="key"

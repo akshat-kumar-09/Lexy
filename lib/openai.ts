@@ -2,6 +2,7 @@ import { threadsContextForPrompt } from "@/lib/threads";
 import type {
   DeepDiveResult,
   LexiconWord,
+  MetaphorGridItem,
   MetaphorGridResponse,
   ScribbleAnalysis,
   TasteGridResponse,
@@ -153,8 +154,44 @@ export async function analyseScribble(
   );
 }
 
+function metaphorGridSystem(itemCount: number): string {
+  return `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
+{
+  "suggestions": [
+    {
+      "metaphor": "vivid figurative phrase someone could adopt — not a single dictionary lemma",
+      "unpacking": "plain language: what the image means",
+      "image_strength": "one sentence: why this image lands",
+      "example_sentences": ["three natural sentences using or alluding to this metaphor"],
+      "why_for_you": "one short line: why this fits their taste and their exploration themes"
+    }
+  ]
+}
+Rules:
+- suggestions must contain EXACTLY ${itemCount} items.
+- Each item needs all fields. example_sentences must have exactly 3 strings.
+- Metaphors must be distinct — no near-duplicates.
+- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).
+- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).`;
+}
+
+function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set<string>): MetaphorGridItem[] {
+  const seen = new Set<string>();
+  const out: MetaphorGridItem[] = [];
+  for (const batch of batches) {
+    for (const s of batch) {
+      const k = s.metaphor?.toLowerCase().trim();
+      if (!k || excludeSet.has(k) || seen.has(k)) continue;
+      seen.add(k);
+      out.push(s);
+    }
+  }
+  return out;
+}
+
 /**
  * Exactly 10 metaphors for the grid — same rhythm as Deep Dive’s 25-word grid, fewer cells.
+ * Uses two parallel API requests (5 + 5) so latency tracks the slower call.
  */
 export async function generateMetaphorGrid(
   apiKey: string,
@@ -171,43 +208,39 @@ export async function generateMetaphorGrid(
   const excludeSet = new Set(excludeMetaphors.map((m) => m.toLowerCase().trim()).filter(Boolean));
   const excludeList = [...excludeSet].slice(0, 120).join(", ") || "(none)";
 
-  const system = `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
-{
-  "suggestions": [
-    {
-      "metaphor": "vivid figurative phrase someone could adopt — not a single dictionary lemma",
-      "unpacking": "plain language: what the image means",
-      "image_strength": "one sentence: why this image lands",
-      "example_sentences": ["three natural sentences using or alluding to this metaphor"],
-      "why_for_you": "one short line: why this fits their taste and their exploration themes"
-    }
-  ]
-}
-Rules:
-- suggestions must contain EXACTLY 10 items.
-- Each item needs all fields. example_sentences must have exactly 3 strings.
-- Metaphors must be distinct — no near-duplicates.
-- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).`;
-
-  const user = `They already keep these words/phrases: ${known}
+  const baseUser = `They already keep these words/phrases: ${known}
 ${threadBlock}
-Already shown or saved today (do NOT repeat these images): ${excludeList}
+Already shown or saved today (do NOT repeat these images): ${excludeList}`;
 
-Return 10 NEW wearable metaphors — fresh, specific; clichés only if subverted. Spread across varied images while still coherent with their lexicon and any exploration themes they named.`;
+  const system5a = metaphorGridSystem(5);
+  const system5b = metaphorGridSystem(5);
 
-  const raw = await chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system, user, 0.72);
+  const user5a = `${baseUser}
 
-  let suggestions = Array.isArray(raw.suggestions) ? raw.suggestions : [];
-  suggestions = suggestions.filter(
-    (s) => s.metaphor && !excludeSet.has(s.metaphor.toLowerCase().trim())
+Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’s grid (another completion supplies batch B). Fresh, specific; clichés only if subverted.`;
+
+  const user5b = `${baseUser}
+
+Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (another completion supplied batch A). Fresh, specific; clichés only if subverted.`;
+
+  const [rawA, rawB] = await Promise.all([
+    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5a, user5a, 0.72),
+    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5b, user5b, 0.72),
+  ]);
+
+  let suggestions = mergeMetaphorSuggestions(
+    [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
+    excludeSet
   );
+
+  const baseSystem10 = metaphorGridSystem(10);
 
   if (suggestions.length < 10) {
     const need = 10 - suggestions.length;
     const fill = await chatJson<MetaphorGridResponse>(
       apiKey,
       "gpt-4o-mini",
-      `${system}\nThe previous reply had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
+      `${baseSystem10}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
       `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
       0.68
     );
@@ -230,22 +263,8 @@ function lexiconTastePayload(lexicon: Record<string, LexiconWord>): string {
   return rows.length ? rows.join("\n") : "(empty — infer a literary, curious reader)";
 }
 
-/**
- * Exactly 25 words tailored to current ratings. Excludes words already in the lexicon.
- * Call again after each rating so the grid reflects refined taste.
- */
-export async function generateTasteGrid(
-  apiKey: string,
-  lexicon: Record<string, LexiconWord>,
-  context?: { lastRatedWord?: string; lastRating?: number },
-  explorationThreads: string[] = []
-): Promise<TasteGridResponse> {
-  const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
-  const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
-
-  const threadBlock = threadsContextForPrompt(explorationThreads);
-
-  const system = `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
+function tasteGridSystem(itemCount: number): string {
+  return `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
 {
   "suggestions": [
     {
@@ -258,42 +277,90 @@ export async function generateTasteGrid(
   ]
 }
 Rules:
-- suggestions must contain EXACTLY 25 items.
+- suggestions must contain EXACTLY ${itemCount} items.
 - Every word MUST have IPA pronunciation in slashes.
 - Do not include any word the user already has in their lexicon (case-insensitive match on lemma).
 - Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
 - Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
-- If user-chosen exploration themes are provided in the user message, at least half the suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the grid still feels varied.`;
+- If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.
+- Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).`;
+}
+
+function mergeTasteSuggestions(
+  batches: TasteGridWord[][],
+  exclude: Set<string>
+): TasteGridWord[] {
+  const seen = new Set<string>();
+  const out: TasteGridWord[] = [];
+  for (const batch of batches) {
+    for (const s of batch) {
+      const k = s.word?.toLowerCase().trim();
+      if (!k || exclude.has(k) || seen.has(k)) continue;
+      seen.add(k);
+      out.push(s);
+    }
+  }
+  return out;
+}
+
+/**
+ * Exactly 25 words tailored to current ratings. Excludes words already in the lexicon.
+ * Call again after each rating so the grid reflects refined taste.
+ *
+ * Uses two parallel API requests (13 + 12 words) so wall-clock time tracks the slower call instead of one huge completion.
+ */
+export async function generateTasteGrid(
+  apiKey: string,
+  lexicon: Record<string, LexiconWord>,
+  context?: { lastRatedWord?: string; lastRating?: number },
+  explorationThreads: string[] = []
+): Promise<TasteGridResponse> {
+  const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
+  const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
+
+  const threadBlock = threadsContextForPrompt(explorationThreads);
 
   const last =
     context?.lastRatedWord && context.lastRating != null
       ? `They just rated "${context.lastRatedWord}" at ${context.lastRating}/10 — let that inform the next grid.\n`
       : "";
 
-  const user = `${last}Words already in their lexicon (do NOT suggest these again): ${excludeList}
+  const baseUser = `${last}Words already in their lexicon (do NOT suggest these again): ${excludeList}
 
 Their lexicon with ratings (higher = more love):
 ${lexiconTastePayload(lexicon)}
-${threadBlock}
-Generate 25 NEW words for the grid — this grid is how Lexy learns and mirrors their taste. Refresh the palette: new lemmas only, tuned to what the ratings imply.`;
+${threadBlock}`;
 
-  const raw = await chatJson<{ suggestions: TasteGridWord[] }>(
-    apiKey,
-    "gpt-4o-mini",
-    system,
-    user,
-    0.75
+  const system13 = tasteGridSystem(13);
+  const system12 = tasteGridSystem(12);
+
+  const user13 = `${baseUser}
+
+Return ONLY batch A: exactly 13 NEW words — half of a 25-word taste grid (another completion supplies the other half).`;
+
+  const user12 = `${baseUser}
+
+Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (another completion supplied batch A).`;
+
+  const [rawA, rawB] = await Promise.all([
+    chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system13, user13, 0.75),
+    chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system12, user12, 0.75),
+  ]);
+
+  const filtered = mergeTasteSuggestions(
+    [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
+    exclude
   );
 
-  const suggestions = Array.isArray(raw.suggestions) ? raw.suggestions : [];
-  const filtered = suggestions.filter((s) => s.word && !exclude.has(s.word.toLowerCase().trim()));
+  const baseSystem25 = tasteGridSystem(25);
+
   if (filtered.length < 25) {
     const need = 25 - filtered.length;
     const fill = await chatJson<{ suggestions: TasteGridWord[] }>(
       apiKey,
       "gpt-4o-mini",
-      `${system}\nThe previous reply had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
+      `${baseSystem25}\nThe merged batches had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
       `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${threadBlock}`,
       0.7
     );

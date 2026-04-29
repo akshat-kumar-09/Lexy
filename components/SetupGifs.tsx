@@ -5,6 +5,14 @@ import { useEffect, useState } from "react";
 
 const OPENAI_KEYS_URL = "https://platform.openai.com/api-keys";
 
+/**
+ * Visual clips are optional — nothing is bundled in git. Add your own files under `public/onboarding/`:
+ * - install-ios.mp4 or .gif — Safari Share → Add to Home Screen
+ * - install-android.mp4 or .gif — Chrome ⋮ → Install / Add to home screen
+ * - openai-key.mp4 or .gif — screen recording at platform.openai.com/api-keys → Create
+ * Prefer short MP4s (StepMedia tries video first); GIFs work if img loads.
+ */
+
 type PlatformTab = "iphone" | "android";
 
 type StepMediaProps = {
@@ -51,8 +59,13 @@ function StepMedia({ videoSrc, gifSrc, label, caption }: StepMediaProps) {
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">Visual step</p>
           <p className="mt-2 text-xs leading-relaxed text-[#6A6360]">{caption}</p>
           <p className="mt-3 text-[10px] leading-snug text-[#B0A898]">
-            Drop a short clip or GIF in{" "}
-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">{hintPath}</code> — or follow the bullets above.
+            Record your phone or desktop screen, export as MP4 or GIF, then save under{" "}
+            <code className="rounded bg-white px-1 py-0.5 text-[9px]">{hintPath}</code>
+            — use filenames such as{" "}
+            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-ios.mp4</code>,{" "}
+            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-android.mp4</code>,{" "}
+            <code className="rounded bg-white px-1 py-0.5 text-[9px]">openai-key.mp4</code>
+            . Or skip media and follow the bullets.
           </p>
         </div>
         <figcaption className="sr-only">{label}</figcaption>

@@ -1,6 +1,7 @@
 "use client";
 
 import { GenreStrip } from "@/components/GenreStrip";
+import { THREAD_PREVIEW_HIGHLIGHTS } from "@/lib/threads";
 
 /**
  * Home jewel card: full thread editor with dark styling — same data as Settings / Deep Dive / Metaphors.
@@ -13,11 +14,23 @@ export function LexyHomePreview() {
 
       <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#B0A898] sm:text-[10px]">Your threads</p>
       <p className="mt-2.5 max-w-md font-serif text-lg font-bold leading-tight tracking-tight text-[#F5EFE0] sm:mt-3 sm:text-xl md:text-2xl">
-        Name what you want language to explore
+        Your imagination is the limit.
       </p>
       <p className="mt-2 max-w-md text-[13px] leading-relaxed text-[#A8A098] sm:text-sm">
-        Type your own themes — Lexy spins words and metaphors around those ideas (synonyms, registers, and fresh angles).
+        Name what you want language to explore — Lexy spins words and metaphors around your themes (synonyms, registers,
+        and fresh angles).
       </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {THREAD_PREVIEW_HIGHLIGHTS.map((label) => (
+          <span
+            key={label}
+            className="rounded-full border border-[#3D3830] bg-[#252220] px-3 py-1 text-[11px] font-medium tracking-tight text-[#C8BFB0]"
+          >
+            {label}
+          </span>
+        ))}
+      </div>
 
       <div className="mt-5 sm:mt-6">
         <GenreStrip variant="dark" hideBrandTitle />

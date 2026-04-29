@@ -29,7 +29,11 @@ export const useSettings = create<SettingsState>()(
       openaiApiKey: "",
       setOpenaiApiKey: (openaiApiKey) => set({ openaiApiKey }),
     }),
-    { name: "lexy-settings", storage: createJSONStorage(() => localStorage) }
+    {
+      name: "lexy-settings",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ openaiApiKey: s.openaiApiKey }),
+    }
   )
 );
 

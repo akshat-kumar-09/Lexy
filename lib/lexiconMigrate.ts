@@ -1,5 +1,6 @@
 import type {
   LexiconData,
+  LexiconWord,
   MetaphorDayEntry,
   MetaphorGridItem,
   ScribbleRewriteEntry,
@@ -151,4 +152,45 @@ export function normalizeLexiconPayload(data: unknown): LexiconData | null {
     metaphor_history,
     scribble_rewrites,
   };
+}
+
+/**
+ * Merge server and local lexicon without dropping rows. Local entries win on duplicate word keys
+ * (same device is source of truth for conflicts). Use after cloud fetch so stale server snapshots
+ * cannot wipe a fuller localStorage restore.
+ */
+export function mergeLexiconPreferLocal(server: LexiconData, local: LexiconData): LexiconData {
+  const words: Record<string, LexiconWord> = { ...server.words, ...local.words };
+
+  const byDate = new Map<string, MetaphorDayEntry>();
+  for (const h of server.metaphor_history) {
+    byDate.set(h.date, h);
+  }
+  for (const h of local.metaphor_history) {
+    const existing = byDate.get(h.date);
+    if (!existing) {
+      byDate.set(h.date, h);
+      continue;
+    }
+    const seen = new Set(existing.suggestions.map((s) => s.metaphor.toLowerCase().trim()));
+    const merged = [...existing.suggestions];
+    for (const s of h.suggestions) {
+      const k = s.metaphor.toLowerCase().trim();
+      if (k && !seen.has(k)) {
+        seen.add(k);
+        merged.push(s);
+      }
+    }
+    byDate.set(h.date, { date: h.date, suggestions: merged });
+  }
+  const metaphor_history = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  const byId = new Map<string, ScribbleRewriteEntry>();
+  for (const s of server.scribble_rewrites) byId.set(s.id, s);
+  for (const s of local.scribble_rewrites) byId.set(s.id, s);
+  const scribble_rewrites = [...byId.values()]
+    .sort((a, b) => b.saved_at.localeCompare(a.saved_at))
+    .slice(0, 80);
+
+  return { words, metaphor_history, scribble_rewrites };
 }

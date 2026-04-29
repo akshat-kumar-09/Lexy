@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { mergeLexiconPreferLocal } from "@/lib/lexiconMigrate";
 import { importLexiconFromUnknown, useLexicon } from "@/lib/store";
 import { useEffect, useRef, useState } from "react";
 
@@ -14,11 +15,23 @@ function LexiconCloudSyncInner() {
   const { userId, isLoaded } = useAuth();
   const importLexicon = useLexicon((s) => s.importLexicon);
   const [cloudReady, setCloudReady] = useState(false);
+  const [lexiconHydrated, setLexiconHydrated] = useState(() => useLexicon.persist.hasHydrated());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSave = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !userId) {
+    if (useLexicon.persist.hasHydrated()) {
+      setLexiconHydrated(true);
+      return;
+    }
+    const unsub = useLexicon.persist.onFinishHydration(() => {
+      setLexiconHydrated(true);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded || !userId || !lexiconHydrated) {
       setCloudReady(false);
       return;
     }
@@ -50,7 +63,21 @@ function LexiconCloudSyncInner() {
         const localCount = Object.keys(local.words).length;
 
         skipNextSave.current = true;
-        if (serverCount > 0) {
+        if (serverCount > 0 && localCount > 0) {
+          const merged = mergeLexiconPreferLocal(normalized, local);
+          importLexicon(merged);
+          // Merged state must be written back: skipNextSave blocks the store subscriber,
+          // so without this PUT the server never gets the union and other devices stay stale.
+          await fetch("/api/lexicon", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              words: merged.words,
+              metaphor_history: merged.metaphor_history,
+              scribble_rewrites: merged.scribble_rewrites,
+            }),
+          });
+        } else if (serverCount > 0) {
           importLexicon(normalized);
         } else if (localCount > 0) {
           await fetch("/api/lexicon", {
@@ -74,7 +101,7 @@ function LexiconCloudSyncInner() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, userId, importLexicon]);
+  }, [isLoaded, userId, importLexicon, lexiconHydrated]);
 
   useEffect(() => {
     if (!cloudReady || !userId) return;

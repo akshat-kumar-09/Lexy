@@ -6,3 +6,10 @@ CREATE TABLE IF NOT EXISTS lexicon_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS lexicon_snapshots_updated_at_idx ON lexicon_snapshots (updated_at DESC);
+
+-- Optional OpenAI key per signed-in user (HTTPS + Clerk only; run if you use cloud restore).
+CREATE TABLE IF NOT EXISTS user_secrets (
+  user_id TEXT PRIMARY KEY,
+  openai_api_key TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
