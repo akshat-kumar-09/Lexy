@@ -388,9 +388,14 @@ export async function deepDiveWord(
   "example_sentences": ["three sentences"],
   "origin": "etymology",
   "related_words": ["three related words"],
-  "used_by": "a memorable literary appearance — author or work"
+  "used_by": "a memorable literary appearance — author or work",
+  "related_form_definitions": [
+    { "word": "lemma", "part_of_speech": "adjective|noun|etc", "definition": "short gloss — meaning only" }
+  ]
 }
-All fields required. example_sentences length 3. related_words length 3. Pronunciation mandatory.`;
+All fields required except you may omit related_form_definitions if truly none exist (prefer including them).
+example_sentences length 3. related_words length 3. Pronunciation mandatory.
+related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].`;
 
   return chatJson<DeepDiveResult>(
     apiKey,

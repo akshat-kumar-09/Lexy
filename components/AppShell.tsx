@@ -2,6 +2,7 @@
 
 import { NavAuthMobile, NavAuthSidebar } from "@/components/NavAuth";
 import { PageEssence } from "@/components/PageEssence";
+import { SelectionDeepDive } from "@/components/SelectionDeepDive";
 import { VoiceValuedButton } from "@/components/VoiceValuedButton";
 import { getEssenceLine } from "@/lib/languageQuotes";
 import Link from "next/link";
@@ -20,7 +21,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#FEFCF8] text-[#1C1917] md:flex-row">
-      <aside className="hidden shrink-0 flex-col border-r border-[#2A2520] bg-[#1C1917] px-5 py-8 md:flex md:w-[220px]">
+      <aside
+        className="hidden shrink-0 flex-col border-r border-[#2A2520] bg-[#1C1917] px-5 py-8 md:flex md:w-[220px]"
+        data-no-deep-dive
+      >
         <Link href="/" className="font-serif text-2xl font-bold tracking-tight text-[#F5EFE0]">
           Lexy
         </Link>
@@ -55,7 +59,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex min-h-[100dvh] flex-1 flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0">
-        <header className="flex min-h-[3.25rem] items-center gap-2 border-b border-[#EDE8E0] px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-5 md:min-h-0 md:px-10 md:py-5">
+        <header
+          className="flex min-h-[3.25rem] items-center gap-2 border-b border-[#EDE8E0] px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] sm:px-5 md:min-h-0 md:px-10 md:py-5"
+          data-no-deep-dive
+        >
           <Link
             href="/"
             className="flex min-h-11 items-center font-serif text-xl font-bold leading-none md:hidden"
@@ -76,9 +83,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex-1 px-4 py-5 sm:px-5 sm:py-6 md:px-10 md:py-10">{children}</div>
       </main>
 
+      <SelectionDeepDive />
       <VoiceValuedButton />
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-[#EDE8E0] bg-[#FEFCF8]/95 px-1 pt-1 pb-[calc(0.35rem+env(safe-area-inset-bottom))] backdrop-blur-md md:hidden">
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-[#EDE8E0] bg-[#FEFCF8]/95 px-1 pt-1 pb-[calc(0.35rem+env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"
+        data-no-deep-dive
+      >
         {nav.map((n) => {
           const active = pathname === n.href;
           return (

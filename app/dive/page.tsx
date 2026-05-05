@@ -9,15 +9,48 @@ import { deepDiveWord, generateTasteGrid } from "@/lib/openai";
 import { playLexiconChime } from "@/lib/sound";
 import { tasteRatingsLine } from "@/lib/lexyCopy";
 import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
-import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
+import type { DeepDiveResult, LexiconWord, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
-import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
-export default function DivePage() {
+function lexiconWordToFallback(w: LexiconWord): DeepDiveResult {
+  const ex = w.example.trim();
+  const def = w.definition.trim();
+  const example_sentences = [
+    ex || def || "—",
+    def && def !== ex ? def : ex || def || "—",
+    [ex, def].filter(Boolean).join(" ").trim() || "—",
+  ].slice(0, 3);
+
+  return {
+    word: w.word,
+    pronunciation: w.pronunciation,
+    part_of_speech: w.part_of_speech,
+    definition: w.definition,
+    nuance:
+      "This is what you saved in your lexicon. Add your OpenAI API key in Settings anytime you want a fresh deep dive — nuance, richer examples, related forms, and etymology fetched anew.",
+    example_sentences,
+    origin: w.origin,
+    related_words: [],
+    used_by: "—",
+    related_form_definitions: [],
+  };
+}
+
+function DivePageContent() {
   const apiKey = useSettings((s) => s.openaiApiKey);
   const explorationThreads = useTasteProfile((s) => s.threads);
   const upsertWord = useLexicon((s) => s.upsertWord);
+
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const wordFromUrl = searchParams.get("word");
+
+  const openedUrlLemmaRef = useRef<string | null>(null);
 
   const [suggestions, setSuggestions] = useState<TasteGridWord[]>([]);
   const [gridLoading, setGridLoading] = useState(false);
@@ -60,26 +93,61 @@ export default function DivePage() {
     void loadGrid();
   }, [apiKey, gridNonce, loadGrid, explorationThreads]);
 
-  async function openDive(lemma: string, hint?: TasteGridWord | null) {
+  const openDive = useCallback(async (lemma: string, hint?: TasteGridWord | null) => {
+    const trimmed = lemma.trim();
+    if (!trimmed) return;
+
+    setError(null);
+
     if (!apiKey) {
-      setError("Add your OpenAI API key in Settings.");
+      const saved = useLexicon.getState().words[trimmed.toLowerCase()];
+      if (hint) setSelectedFromGrid(hint);
+      else setSelectedFromGrid(null);
+      if (saved) {
+        setResult(lexiconWordToFallback(saved));
+        setRating(saved.rating);
+        return;
+      }
+      setError("Add your OpenAI API key in Settings — or open a word you already saved.");
+      setResult(null);
       return;
     }
+
     setLoadingDive(true);
-    setError(null);
     setResult(null);
     if (hint) setSelectedFromGrid(hint);
     else setSelectedFromGrid(null);
     try {
-      const r = await deepDiveWord(apiKey, lemma);
+      const r = await deepDiveWord(apiKey, trimmed);
       setResult(r);
-      setRating(7.5);
+      const saved = useLexicon.getState().words[trimmed.toLowerCase()];
+      setRating(saved?.rating ?? 7.5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not dive into that word");
     } finally {
       setLoadingDive(false);
     }
-  }
+  }, [apiKey]);
+
+  useEffect(() => {
+    const raw = wordFromUrl?.trim();
+    if (!raw) {
+      openedUrlLemmaRef.current = null;
+      return;
+    }
+    let lemma = raw;
+    try {
+      lemma = decodeURIComponent(raw);
+    } catch {
+      lemma = raw;
+    }
+    lemma = lemma.trim();
+    if (!lemma) return;
+    const key = lemma.toLowerCase();
+    if (openedUrlLemmaRef.current === key) return;
+    openedUrlLemmaRef.current = key;
+    void openDive(lemma, null);
+  }, [wordFromUrl, openDive]);
 
   async function runCustom() {
     const q = query.trim();
@@ -109,6 +177,10 @@ export default function DivePage() {
     setResult(null);
     setQuery("");
     setSelectedFromGrid(null);
+    openedUrlLemmaRef.current = null;
+    if (pathname === "/dive" && searchParams.get("word")) {
+      router.replace("/dive", { scroll: false });
+    }
     setGridNonce((n) => n + 1);
   }
 
@@ -122,10 +194,27 @@ export default function DivePage() {
     setResult(null);
     setSelectedFromGrid(null);
     setError(null);
+    openedUrlLemmaRef.current = null;
+    if (pathname === "/dive" && searchParams.get("word")) {
+      router.replace("/dive", { scroll: false });
+    }
   }
 
   const detailOpen = Boolean(loadingDive || result);
   useBodyScrollLock(detailOpen);
+
+  const lexiconWords = useLexicon((s) => s.words);
+
+  const rawRelated = result?.related_form_definitions;
+  const relatedForms = (
+    Array.isArray(rawRelated) ? rawRelated : []
+  ).filter((x) => {
+    if (!x?.word?.trim() || !x?.definition?.trim()) return false;
+    if (!result) return true;
+    return x.word.toLowerCase().trim() !== result.word.toLowerCase().trim();
+  });
+
+  const alreadySaved = Boolean(result && lexiconWords[result.word.toLowerCase()]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-10 pb-8">
@@ -134,7 +223,8 @@ export default function DivePage() {
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
           Twenty-five words picked for your taste — the set turns over each time you rate one, and Lexy leans into what
           you love. Your threads (above) steer the palette; change them anytime. Tap a word
-          for the full story; IPA is always in the room.
+          for the full story; IPA is always in the room. From My Lexicon, open any saved word for the same page —
+          pronunciation, examples, etymology, and related forms.
         </p>
       </div>
 
@@ -143,6 +233,9 @@ export default function DivePage() {
       {!apiKey && (
         <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p>Add your OpenAI API key in Settings to load your taste grid and dive into words.</p>
+          <p className="text-xs leading-relaxed text-amber-950/90">
+            Without a key, opening a word from your lexicon still shows everything you saved — plus pronunciation playback.
+          </p>
           <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
         </div>
       )}
@@ -235,90 +328,112 @@ export default function DivePage() {
                 </button>
               </div>
 
-            {loadingDive && (
-              <p className="font-serif text-sm italic text-[#8B7355]">Opening the page on this word…</p>
-            )}
+              {loadingDive && (
+                <p className="font-serif text-sm italic text-[#8B7355]">Opening the page on this word…</p>
+              )}
 
-            {selectedFromGrid && !loadingDive && result && (
-              <p className="text-xs text-[#B0A898]">
-                From your grid: <span className="font-medium text-[#1C1917]">{selectedFromGrid.word}</span>
-              </p>
-            )}
+              {selectedFromGrid && !loadingDive && result && (
+                <p className="text-xs text-[#B0A898]">
+                  From your grid: <span className="font-medium text-[#1C1917]">{selectedFromGrid.word}</span>
+                </p>
+              )}
 
-            {result && !loadingDive && (
-              <div className="relative space-y-5">
-                <div className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-6 shadow-sm">
-                  <AddWordBurst show={burst} />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">
-                      {result.word}
-                    </h2>
-                    <PronounceButton word={result.word} />
-                  </div>
-                  <IPA className="mt-2 block">{result.pronunciation}</IPA>
-                  <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
-                    {result.part_of_speech}
-                  </p>
-                  <p className="mt-4 text-sm leading-relaxed text-[#4A4340]">{result.definition}</p>
-                  <div className="mt-5 rounded-xl bg-[#F5EFE0] p-4">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">The nuance</p>
-                    <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.nuance}</p>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">In three sentences</p>
-                  <div className="mt-3 space-y-3">
-                    {result.example_sentences.map((ex, i) => (
-                      <p key={i} className="border-l-2 border-[#EDE8E0] pl-3 font-serif text-sm italic text-[#8B7355]">
-                        &ldquo;{ex}&rdquo;
-                      </p>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Etymology</p>
-                  <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.origin}</p>
-                  <div className="mt-6 border-t border-[#F5F0EA] pt-6">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
-                      Where you might have met it
+              {result && !loadingDive && (
+                <div className="relative space-y-5">
+                  <div className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-6 shadow-sm">
+                    <AddWordBurst show={burst} />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">
+                        {result.word}
+                      </h2>
+                      <PronounceButton word={result.word} />
+                    </div>
+                    <IPA className="mt-2 block">{result.pronunciation}</IPA>
+                    <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
+                      {result.part_of_speech}
                     </p>
-                    <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.used_by}</p>
-                  </div>
-                </div>
+                    <p className="mt-4 text-sm leading-relaxed text-[#4A4340]">{result.definition}</p>
 
-                {(result.related_words ?? []).length > 0 && (
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Kindred words</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {result.related_words.map((rw) => (
-                        <span
-                          key={rw}
-                          className="rounded-full bg-[#F5EFE0] px-3 py-1 font-serif text-sm italic text-[#8B7355]"
-                        >
-                          {rw}
-                        </span>
+                    {relatedForms.length > 0 && (
+                      <div className="mt-5 rounded-xl border border-[#F5F0EA] bg-[#FDFBF7] p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8B7355]">
+                          Related forms — meanings only
+                        </p>
+                        <ul className="mt-3 space-y-3">
+                          {relatedForms.map((rf) => (
+                            <li key={`${rf.word}-${rf.part_of_speech}`} className="text-sm leading-relaxed text-[#4A4340]">
+                              <span className="font-serif font-semibold text-[#1C1917]">{rf.word}</span>
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#B0A898]">
+                                {" "}
+                                · {rf.part_of_speech}
+                              </span>
+                              <span className="block text-[#6A6360]">{rf.definition}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="mt-5 rounded-xl bg-[#F5EFE0] p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">The nuance</p>
+                      <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.nuance}</p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">In three sentences</p>
+                    <div className="mt-3 space-y-3">
+                      {result.example_sentences.map((ex, i) => (
+                        <p key={i} className="border-l-2 border-[#EDE8E0] pl-3 font-serif text-sm italic text-[#8B7355]">
+                          &ldquo;{ex}&rdquo;
+                        </p>
                       ))}
                     </div>
                   </div>
-                )}
 
-                <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-                  <RatingDial value={rating} onChange={setRating} label="How much do you want to keep it?" />
-                  <button
-                    type="button"
-                    onClick={addToLexicon}
-                    className="mt-5 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0]"
-                  >
-                    Rate & add to lexicon
-                  </button>
-                  <p className="mt-3 text-center text-[11px] italic text-[#B0A898]">
-                    Adding refreshes your 25-word grid so Lexy can learn your taste.
-                  </p>
+                  <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Etymology</p>
+                    <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.origin}</p>
+                    <div className="mt-6 border-t border-[#F5F0EA] pt-6">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+                        Where you might have met it
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.used_by}</p>
+                    </div>
+                  </div>
+
+                  {(result.related_words ?? []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Kindred words</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {result.related_words.map((rw) => (
+                          <Link
+                            key={rw}
+                            href={`/dive?word=${encodeURIComponent(rw)}`}
+                            className="rounded-full bg-[#F5EFE0] px-3 py-1 font-serif text-sm italic text-[#8B7355] transition hover:bg-[#EDE4D4]"
+                          >
+                            {rw}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
+                    <RatingDial value={rating} onChange={setRating} label="How much do you want to keep it?" />
+                    <button
+                      type="button"
+                      onClick={addToLexicon}
+                      className="mt-5 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0]"
+                    >
+                      {alreadySaved ? "Update rating in lexicon" : "Rate & add to lexicon"}
+                    </button>
+                    <p className="mt-3 text-center text-[11px] italic text-[#B0A898]">
+                      Adding refreshes your 25-word grid so Lexy can learn your taste.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
             </motion.section>
           </>
         )}
@@ -352,5 +467,17 @@ export default function DivePage() {
         </div>
       </section>
     </div>
+  );
+}
+
+export default function DivePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-3xl pb-8 font-serif text-sm italic text-[#B0A898]">Opening Deep Dive…</div>
+      }
+    >
+      <DivePageContent />
+    </Suspense>
   );
 }

@@ -4,6 +4,7 @@ import { SignedIn, SignedOut } from "@clerk/nextjs";
 import Link from "next/link";
 import { GenreStrip } from "@/components/GenreStrip";
 import { SetupGifs } from "@/components/SetupGifs";
+import { mergeLexiconPreferLocal } from "@/lib/lexiconMigrate";
 import { importLexiconFromUnknown, useLexicon, useSettings } from "@/lib/store";
 import { clearSetupHintDismissed } from "@/lib/setupStorage";
 import { useEffect, useRef, useState } from "react";
@@ -17,6 +18,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const mergeFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLocal(openaiApiKey);
@@ -43,6 +45,32 @@ export default function SettingsPage() {
         }
         importLexicon(data);
         setImportMsg("Lexicon imported. It will sync to your account if you are signed in.");
+      } catch {
+        setImportMsg("Could not read that JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function onPickMergeJson(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const data = importLexiconFromUnknown(parsed);
+        if (!data) {
+          setImportMsg("That file is not a valid Lexy lexicon JSON.");
+          return;
+        }
+        const current = useLexicon.getState();
+        const merged = mergeLexiconPreferLocal(data, current);
+        importLexicon(merged);
+        setImportMsg(
+          "Backup merged into this device (same word twice keeps this device’s version). Sync will update your account if you’re signed in."
+        );
       } catch {
         setImportMsg("Could not read that JSON file.");
       }
@@ -152,18 +180,38 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Restore from backup</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Restore & merge backups</h2>
         <p className="text-sm leading-relaxed text-[#6A6360]">
-          Load a <code className="rounded bg-[#F5F0EA] px-1.5 py-0.5 text-xs">.json</code> file you exported earlier.
+          From <strong className="font-medium text-[#4A4340]">My Lexy</strong>, download{" "}
+          <code className="rounded bg-[#F5F0EA] px-1.5 py-0.5 text-xs">.json</code> on each device. Use{" "}
+          <strong className="font-medium text-[#4A4340]">Merge</strong> to combine two exports without wiping this
+          device; identical words keep <strong className="font-medium text-[#4A4340]">this browser&apos;s</strong>{" "}
+          rating and gloss.
         </p>
-        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onPickJson} />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="rounded-full border border-[#8B7355] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#8B7355]"
-        >
-          Import lexicon JSON
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onPickJson} />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="rounded-full border border-[#8B7355] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#8B7355]"
+          >
+            Replace from JSON
+          </button>
+          <input
+            ref={mergeFileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onPickMergeJson}
+          />
+          <button
+            type="button"
+            onClick={() => mergeFileRef.current?.click()}
+            className="rounded-full bg-[#1C1917] px-6 py-2.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#F5EFE0]"
+          >
+            Merge backup JSON
+          </button>
+        </div>
         {importMsg && <p className="text-sm text-[#6A6360]">{importMsg}</p>}
       </section>
     </div>

@@ -5,11 +5,13 @@ import { RatingDial } from "@/components/RatingDial";
 import { useLexicon } from "@/lib/store";
 import type { LexiconWord } from "@/lib/types";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 
 export default function LexiconPage() {
   const words = useLexicon((s) => s.words);
   const updateRating = useLexicon((s) => s.updateRating);
+  const removeWord = useLexicon((s) => s.removeWord);
   const exportText = useLexicon((s) => s.exportText);
   const exportLexiconJson = useLexicon((s) => s.exportLexiconJson);
 
@@ -136,7 +138,7 @@ export default function LexiconPage() {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1C7A40]">Favourites</h2>
               <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white">
                 {favourites.map((w) => (
-                  <WordRow key={w.word} w={w} />
+                  <WordRow key={w.word} w={w} onRemove={() => removeWord(w.word)} />
                 ))}
               </div>
             </section>
@@ -147,7 +149,7 @@ export default function LexiconPage() {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">All words</h2>
               <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white">
                 {rest.map((w) => (
-                  <WordRow key={w.word} w={w} />
+                  <WordRow key={w.word} w={w} onRemove={() => removeWord(w.word)} />
                 ))}
               </div>
             </section>
@@ -187,6 +189,22 @@ export default function LexiconPage() {
               >
                 Save
               </button>
+              <button
+                type="button"
+                disabled={!selected}
+                onClick={() => {
+                  if (!selected) return;
+                  if (
+                    typeof window !== "undefined" &&
+                    !window.confirm(`Remove “${selected.word}” from your lexicon?`)
+                  )
+                    return;
+                  removeWord(selected.word);
+                }}
+                className="rounded-full border border-red-200 bg-white px-6 py-3 text-sm font-semibold text-red-800 transition hover:bg-red-50 disabled:opacity-40"
+              >
+                Delete word
+              </button>
             </div>
           </section>
         </>
@@ -195,20 +213,45 @@ export default function LexiconPage() {
   );
 }
 
-function WordRow({ w }: { w: LexiconWord }) {
+function WordRow({ w, onRemove }: { w: LexiconWord; onRemove: () => void }) {
   const fav = w.rating >= FAVOURITE_THRESHOLD;
+  const href = `/dive?word=${encodeURIComponent(w.word)}`;
+
+  function handleRemove(e: MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    if (typeof window !== "undefined" && !window.confirm(`Remove “${w.word}” from your lexicon?`)) return;
+    onRemove();
+  }
+
   return (
-    <div className="flex flex-col gap-2 px-5 py-4 md:flex-row md:items-baseline md:gap-6">
-      <div className="min-w-[140px] md:min-w-[160px]">
-        <span className="font-serif text-lg font-bold text-[#1C1917]">{w.word}</span>
-        <IPA className="mt-0.5 block text-xs">{w.pronunciation}</IPA>
-      </div>
-      <p className="flex-1 text-sm leading-relaxed text-[#6A6360]">{w.definition}</p>
-      <span
-        className={`shrink-0 text-sm font-semibold tabular-nums ${fav ? "text-[#1C7A40]" : "text-[#1C1917]"}`}
+    <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-start md:gap-6">
+      <Link
+        href={href}
+        className="min-w-0 flex-1 rounded-xl outline-none ring-[#8B7355]/0 transition hover:bg-[#FDFBF7] focus-visible:ring-4 md:flex md:gap-6"
       >
-        {w.rating.toFixed(1)}
-      </span>
+        <div className="min-w-[140px] md:min-w-[160px]">
+          <span className="font-serif text-lg font-bold text-[#1C1917]">{w.word}</span>
+          <IPA className="mt-0.5 block text-xs">{w.pronunciation}</IPA>
+          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">
+            Open full page →
+          </p>
+        </div>
+        <p className="mt-3 flex-1 text-sm leading-relaxed text-[#6A6360] md:mt-0">{w.definition}</p>
+      </Link>
+      <div className="flex shrink-0 flex-row items-center gap-3 md:flex-col md:items-end">
+        <span
+          className={`text-sm font-semibold tabular-nums ${fav ? "text-[#1C7A40]" : "text-[#1C1917]"}`}
+        >
+          {w.rating.toFixed(1)}
+        </span>
+        <button
+          type="button"
+          onClick={handleRemove}
+          className="rounded-full border border-[#EDE8E0] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] transition hover:border-red-200 hover:text-red-800"
+        >
+          Delete
+        </button>
+      </div>
     </div>
   );
 }

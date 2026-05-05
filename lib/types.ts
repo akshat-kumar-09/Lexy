@@ -71,6 +71,13 @@ export interface ScribbleAnalysis {
   vocabulary_candidates: VocabularyCandidate[];
 }
 
+/** Inflected or derived lemmas (e.g. perspicacity → perspicacious): meanings only, no etymology. */
+export interface RelatedFormDefinition {
+  word: string;
+  part_of_speech: string;
+  definition: string;
+}
+
 export interface DeepDiveResult {
   word: string;
   pronunciation: string;
@@ -81,6 +88,8 @@ export interface DeepDiveResult {
   origin: string;
   related_words: string[];
   used_by: string;
+  /** Same root family: adjective/noun/verb variants etc. — definitions only. */
+  related_form_definitions?: RelatedFormDefinition[];
 }
 
 /** One cell in the Deep Dive taste grid — 25 at a time, refreshed as taste updates. */

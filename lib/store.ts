@@ -39,6 +39,7 @@ export const useSettings = create<SettingsState>()(
 
 interface LexiconStore extends LexiconData {
   upsertWord: (w: LexiconWord) => void;
+  removeWord: (wordKey: string) => void;
   updateRating: (wordKey: string, rating: number) => void;
   appendMetaphor: (entry: MetaphorDayEntry) => void;
   appendScribbleRewrite: (entry: ScribbleRewriteEntry) => void;
@@ -55,6 +56,13 @@ export const useLexicon = create<LexiconStore>()(
         set((s) => ({
           words: { ...s.words, [w.word.toLowerCase()]: { ...w, word: w.word } },
         })),
+      removeWord: (wordKey) =>
+        set((s) => {
+          const k = wordKey.toLowerCase();
+          if (!s.words[k]) return s;
+          const { [k]: _, ...rest } = s.words;
+          return { words: rest };
+        }),
       updateRating: (wordKey, rating) =>
         set((s) => {
           const k = wordKey.toLowerCase();
