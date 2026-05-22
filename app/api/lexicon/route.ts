@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { normalizeLexiconPayload } from "@/lib/lexiconMigrate";
+import { mergeLexiconPreferLocal, normalizeLexiconPayload } from "@/lib/lexiconMigrate";
 import { NextResponse } from "next/server";
 import type { LexiconData } from "@/lib/types";
 import { getSql } from "@/lib/db";
@@ -7,6 +7,25 @@ import { getSql } from "@/lib/db";
 function parseBody(data: unknown): LexiconData | null {
   return normalizeLexiconPayload(data);
 }
+
+function parseDeletedWords(data: unknown): string[] {
+  if (!data || typeof data !== "object") return [];
+  const raw = (data as Record<string, unknown>).deleted_words;
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const x of raw) {
+    if (typeof x !== "string") continue;
+    const k = x.toLowerCase().trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(k);
+    if (out.length >= 2000) break;
+  }
+  return out;
+}
+
+const EMPTY: LexiconData = { words: {}, metaphor_history: [], scribble_rewrites: [] };
 
 export async function GET() {
   const { userId } = await auth();
@@ -23,23 +42,28 @@ export async function GET() {
   const row = rows[0] as { payload: unknown; updated_at: string } | undefined;
   if (!row) {
     return NextResponse.json({
-      words: {},
-      metaphor_history: [],
-      scribble_rewrites: [],
+      ...EMPTY,
       updated_at: null,
     });
   }
-  const normalized = normalizeLexiconPayload(row.payload) ?? {
-    words: {},
-    metaphor_history: [],
-    scribble_rewrites: [],
-  };
+  const normalized = normalizeLexiconPayload(row.payload) ?? EMPTY;
   return NextResponse.json({
     ...normalized,
     updated_at: row.updated_at,
   });
 }
 
+/**
+ * PUT is a SERVER-SIDE MERGE, never a blind replace.
+ *
+ * Two devices writing in quick succession used to race: the later PUT replaced
+ * the row, so anything the other device added between its GET and this PUT was
+ * erased ("I came back and my words were gone"). We now load the existing
+ * snapshot, union it with the incoming one (incoming wins on word conflicts so
+ * fresh ratings stick), then apply the client's explicit `deleted_words`
+ * tombstones so genuine deletes still propagate. Old clients without
+ * `deleted_words` get safe additive behaviour automatically.
+ */
 export async function PUT(req: Request) {
   const { userId } = await auth();
   if (!userId) {
@@ -49,17 +73,35 @@ export async function PUT(req: Request) {
   if (!sql) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
+
   let body: unknown;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const parsed = parseBody(body);
-  if (!parsed) {
+
+  const incoming = parseBody(body);
+  if (!incoming) {
     return NextResponse.json({ error: "Invalid lexicon shape" }, { status: 400 });
   }
-  const payload = JSON.stringify(parsed);
+  const deletedWords = parseDeletedWords(body);
+
+  const rows = await sql`
+    SELECT payload FROM lexicon_snapshots WHERE user_id = ${userId}
+  `;
+  const existingRaw = (rows[0] as { payload: unknown } | undefined)?.payload;
+  const existing: LexiconData = normalizeLexiconPayload(existingRaw) ?? EMPTY;
+
+  const merged = mergeLexiconPreferLocal(existing, incoming);
+
+  if (deletedWords.length) {
+    for (const k of deletedWords) {
+      delete merged.words[k];
+    }
+  }
+
+  const payload = JSON.stringify(merged);
   await sql`
     INSERT INTO lexicon_snapshots (user_id, payload, updated_at)
     VALUES (${userId}, ${payload}::jsonb, NOW())
@@ -67,5 +109,6 @@ export async function PUT(req: Request) {
       payload = EXCLUDED.payload,
       updated_at = NOW()
   `;
-  return NextResponse.json({ ok: true });
+
+  return NextResponse.json({ ok: true, ...merged });
 }

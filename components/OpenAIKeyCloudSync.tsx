@@ -17,17 +17,23 @@ function OpenAIKeyCloudSyncInner() {
   const { userId, isLoaded } = useAuth();
   const openaiApiKey = useSettings((s) => s.openaiApiKey);
   const setOpenaiApiKey = useSettings((s) => s.setOpenaiApiKey);
-  const [settingsHydrated, setSettingsHydrated] = useState(() => useSettings.persist.hasHydrated());
+  // SSR-safe: never touch `persist` synchronously during prerender.
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
   const [pullDone, setPullDone] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipPutAfterPull = useRef(false);
 
   useEffect(() => {
-    if (useSettings.persist.hasHydrated()) {
+    const p = useSettings.persist;
+    if (!p) {
       setSettingsHydrated(true);
       return;
     }
-    const unsub = useSettings.persist.onFinishHydration(() => {
+    if (p.hasHydrated()) {
+      setSettingsHydrated(true);
+      return;
+    }
+    const unsub = p.onFinishHydration(() => {
       setSettingsHydrated(true);
     });
     return unsub;

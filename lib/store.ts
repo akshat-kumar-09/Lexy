@@ -38,12 +38,20 @@ export const useSettings = create<SettingsState>()(
 );
 
 interface LexiconStore extends LexiconData {
+  /**
+   * Word keys the user removed locally but the server may not yet have heard
+   * about. Cloud sync sends these as `deleted_words` so the server-side merge
+   * can apply tombstones — without this a delete on one device would
+   * resurrect when another device pulls + re-uploads its full snapshot.
+   */
+  pending_deletes: string[];
   upsertWord: (w: LexiconWord) => void;
   removeWord: (wordKey: string) => void;
   updateRating: (wordKey: string, rating: number) => void;
   appendMetaphor: (entry: MetaphorDayEntry) => void;
   appendScribbleRewrite: (entry: ScribbleRewriteEntry) => void;
   importLexicon: (data: LexiconData) => void;
+  consumePendingDeletes: (keys: string[]) => void;
   exportText: () => string;
   exportLexiconJson: () => string;
 }
@@ -52,17 +60,28 @@ export const useLexicon = create<LexiconStore>()(
   persist(
     (set, get) => ({
       ...empty,
+      pending_deletes: [],
       upsertWord: (w) =>
-        set((s) => ({
-          words: { ...s.words, [w.word.toLowerCase()]: { ...w, word: w.word } },
-        })),
+        set((s) => {
+          const k = w.word.toLowerCase();
+          const next: Partial<LexiconStore> = {
+            words: { ...s.words, [k]: { ...w, word: w.word } },
+          };
+          if (s.pending_deletes.includes(k)) {
+            next.pending_deletes = s.pending_deletes.filter((x) => x !== k);
+          }
+          return next;
+        }),
       removeWord: (wordKey) =>
         set((s) => {
           const k = wordKey.toLowerCase();
           if (!s.words[k]) return s;
           const words = { ...s.words };
           delete words[k];
-          return { words };
+          const pending_deletes = s.pending_deletes.includes(k)
+            ? s.pending_deletes
+            : [...s.pending_deletes, k];
+          return { words, pending_deletes };
         }),
       updateRating: (wordKey, rating) =>
         set((s) => {
@@ -90,6 +109,15 @@ export const useLexicon = create<LexiconStore>()(
           words: data.words ?? {},
           metaphor_history: data.metaphor_history ?? [],
           scribble_rewrites: data.scribble_rewrites ?? [],
+          pending_deletes: [],
+        }),
+      consumePendingDeletes: (keys) =>
+        set((s) => {
+          if (!keys.length) return s;
+          const drop = new Set(keys.map((k) => k.toLowerCase()));
+          const remaining = s.pending_deletes.filter((k) => !drop.has(k));
+          if (remaining.length === s.pending_deletes.length) return s;
+          return { pending_deletes: remaining };
         }),
       exportText: () => {
         const words = get().words;
@@ -113,10 +141,11 @@ export const useLexicon = create<LexiconStore>()(
         words: s.words,
         metaphor_history: s.metaphor_history,
         scribble_rewrites: s.scribble_rewrites,
+        pending_deletes: s.pending_deletes,
       }),
       merge: (persistedState, currentState) => {
         const p = persistedState as
-          | (Partial<LexiconData> & { daily_history?: unknown[] })
+          | (Partial<LexiconData> & { daily_history?: unknown[]; pending_deletes?: unknown })
           | null
           | undefined;
         if (!p || typeof p !== "object") return currentState;
@@ -127,11 +156,22 @@ export const useLexicon = create<LexiconStore>()(
           scribble_rewrites: p.scribble_rewrites,
         });
         if (!normalized) return currentState;
+        const pending_deletes = Array.isArray(p.pending_deletes)
+          ? Array.from(
+              new Set(
+                (p.pending_deletes as unknown[])
+                  .filter((x): x is string => typeof x === "string")
+                  .map((x) => x.toLowerCase().trim())
+                  .filter(Boolean)
+              )
+            )
+          : [];
         return {
           ...currentState,
           words: normalized.words,
           metaphor_history: normalized.metaphor_history,
           scribble_rewrites: normalized.scribble_rewrites,
+          pending_deletes,
         };
       },
     }
