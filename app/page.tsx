@@ -28,7 +28,7 @@ const cards = [
 
 export default function HomePage() {
   return (
-    <div className="mx-auto max-w-2xl space-y-7 sm:space-y-9 md:space-y-10">
+    <div className="mx-auto max-w-2xl space-y-7 sm:space-y-9 md:space-y-10 lg:max-w-4xl">
       <FirstTimeBanner />
 
       <div className="space-y-2.5 sm:space-y-3">
@@ -45,7 +45,7 @@ export default function HomePage() {
 
       <LexyHomePreview />
 
-      <div className="grid gap-3 sm:gap-4">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         {cards.map((c) => (
           <Link
             key={c.href}

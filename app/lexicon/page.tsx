@@ -67,7 +67,7 @@ export default function LexiconPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10">
+    <div className="mx-auto max-w-3xl space-y-10 lg:max-w-6xl">
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">My Lexy</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
@@ -136,7 +136,7 @@ export default function LexiconPage() {
           {favourites.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#1C7A40]">Favourites</h2>
-              <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white">
+              <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white lg:grid lg:grid-cols-2 lg:gap-4 lg:divide-y-0 lg:rounded-none lg:border-0 lg:bg-transparent">
                 {favourites.map((w) => (
                   <WordRow key={w.word} w={w} onRemove={() => removeWord(w.word)} />
                 ))}
@@ -147,7 +147,7 @@ export default function LexiconPage() {
           {rest.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">All words</h2>
-              <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white">
+              <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white lg:grid lg:grid-cols-2 lg:gap-4 lg:divide-y-0 lg:rounded-none lg:border-0 lg:bg-transparent">
                 {rest.map((w) => (
                   <WordRow key={w.word} w={w} onRemove={() => removeWord(w.word)} />
                 ))}
@@ -224,10 +224,10 @@ function WordRow({ w, onRemove }: { w: LexiconWord; onRemove: () => void }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-start md:gap-6">
+    <div className="flex flex-col gap-3 px-5 py-4 md:flex-row md:items-start md:gap-6 lg:rounded-2xl lg:border lg:border-[#EDE8E0] lg:bg-white lg:p-5 lg:shadow-sm lg:transition lg:hover:border-[#8B7355]/40 lg:hover:shadow-md">
       <Link
         href={href}
-        className="min-w-0 flex-1 rounded-xl outline-none ring-[#8B7355]/0 transition hover:bg-[#FDFBF7] focus-visible:ring-4 md:flex md:gap-6"
+        className="min-w-0 flex-1 rounded-xl outline-none ring-[#8B7355]/0 transition hover:bg-[#FDFBF7] focus-visible:ring-4 md:flex md:gap-6 lg:hover:bg-transparent"
       >
         <div className="min-w-[140px] md:min-w-[160px]">
           <span className="font-serif text-lg font-bold text-[#1C1917]">{w.word}</span>

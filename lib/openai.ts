@@ -228,7 +228,7 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
     chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5b, user5b, 0.72),
   ]);
 
-  let suggestions = mergeMetaphorSuggestions(
+  const suggestions = mergeMetaphorSuggestions(
     [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
     excludeSet
   );

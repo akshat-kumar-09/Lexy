@@ -60,8 +60,9 @@ export const useLexicon = create<LexiconStore>()(
         set((s) => {
           const k = wordKey.toLowerCase();
           if (!s.words[k]) return s;
-          const { [k]: _, ...rest } = s.words;
-          return { words: rest };
+          const words = { ...s.words };
+          delete words[k];
+          return { words };
         }),
       updateRating: (wordKey, rating) =>
         set((s) => {
