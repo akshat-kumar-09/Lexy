@@ -16,10 +16,6 @@ export function LexyHomePreview() {
       <p className="mt-2.5 max-w-md font-serif text-lg font-bold leading-tight tracking-tight text-[#F5EFE0] sm:mt-3 sm:text-xl md:text-2xl">
         Your imagination is the limit.
       </p>
-      <p className="mt-2 max-w-md text-[13px] leading-relaxed text-[#A8A098] sm:text-sm">
-        Name what you want language to explore — Lexy spins words and metaphors around your themes (synonyms, registers,
-        and fresh angles).
-      </p>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {THREAD_PREVIEW_HIGHLIGHTS.map((label) => (

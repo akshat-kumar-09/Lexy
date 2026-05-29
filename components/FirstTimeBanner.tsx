@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { dismissSetupHint, isSetupHintDismissed } from "@/lib/setupStorage";
+import { openIntro } from "@/lib/introStorage";
 
 export function FirstTimeBanner() {
   const [visible, setVisible] = useState(false);
@@ -17,10 +18,18 @@ export function FirstTimeBanner() {
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#EDE8E0] bg-[#FDFBF7] px-4 py-3 shadow-sm sm:px-5">
       <p className="min-w-0 flex-1 text-sm leading-relaxed text-[#4A4340]">
         <span className="font-semibold text-[#1C1917]">First time?</span>{" "}
+        <button
+          type="button"
+          onClick={() => openIntro()}
+          className="font-medium text-[#8B7355] underline-offset-2 hover:underline"
+        >
+          Take the welcome tour
+        </button>
+        {" "}or{" "}
         <Link href="/start" className="text-[#8B7355] underline-offset-2 hover:underline">
-          See two quick setup steps
-        </Link>{" "}
-        — home screen + one API key.
+          see the two setup steps
+        </Link>
+        .
       </p>
       <button
         type="button"

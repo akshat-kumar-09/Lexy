@@ -1,29 +1,12 @@
 import { FirstTimeBanner } from "@/components/FirstTimeBanner";
 import { LexyHomePreview } from "@/components/LexyHomePreview";
-import { FAVOURITE_THRESHOLD, HOME_HERO_SUPPORT, LEXICON_NOD } from "@/lib/lexyCopy";
 import Link from "next/link";
 
 const cards = [
-  {
-    href: "/dive",
-    title: "Word Deep Dive",
-    line: "Twenty-five words — rate each one and Lexy learns what you love. Your threads nudge the next batch.",
-  },
-  {
-    href: "/metaphors",
-    title: "Metaphors",
-    line: `Ten images at a time — rate them the same way. ${FAVOURITE_THRESHOLD}+ becomes a lexicon favourite.`,
-  },
-  {
-    href: "/lexicon",
-    title: "My Lexy",
-    line: "Every word you keep, sorted by how much you loved it — the spine Lexy uses to read your taste.",
-  },
-  {
-    href: "/scribble",
-    title: "Morning Scribble",
-    line: "Scribble raw thoughts (or a photo); Lexy reshapes them so you can say it better afterward.",
-  },
+  { href: "/dive", title: "Word Deep Dive" },
+  { href: "/metaphors", title: "Metaphors" },
+  { href: "/lexicon", title: "My Lexy" },
+  { href: "/scribble", title: "Morning Scribble" },
 ];
 
 export default function HomePage() {
@@ -39,8 +22,6 @@ export default function HomePage() {
         <p className="font-serif text-[1.35rem] font-normal italic leading-[1.25] tracking-tight text-[#1C1917] sm:text-2xl md:text-3xl">
           Lexy is your wardrobe.
         </p>
-        <p className="text-[13px] font-medium leading-snug text-[#8B7355] sm:text-sm">{LEXICON_NOD}</p>
-        <p className="max-w-prose text-[15px] leading-[1.65] text-[#5c5550] sm:text-base">{HOME_HERO_SUPPORT}</p>
       </div>
 
       <LexyHomePreview />
@@ -50,10 +31,12 @@ export default function HomePage() {
           <Link
             key={c.href}
             href={c.href}
-            className="group rounded-2xl border border-[#EDE8E0] bg-white p-4 shadow-sm transition-all active:border-[#8B7355]/35 active:bg-[#FDFBF7] sm:p-5 sm:hover:border-[#8B7355]/40 sm:hover:shadow-md"
+            className="group flex items-center justify-between rounded-2xl border border-[#EDE8E0] bg-white px-5 py-4 shadow-sm transition-all active:border-[#8B7355]/35 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/40 sm:hover:shadow-md"
           >
             <h2 className="font-serif text-xl font-bold text-[#1C1917] group-hover:text-[#8B7355]">{c.title}</h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">{c.line}</p>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-[#B0A898] group-hover:text-[#8B7355]">
+              <path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </Link>
         ))}
       </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { LexyIntro } from "@/components/LexyIntro";
 import { NavAuthMobile, NavAuthSidebar } from "@/components/NavAuth";
 import { PageEssence } from "@/components/PageEssence";
 import { SelectionDeepDive } from "@/components/SelectionDeepDive";
@@ -85,6 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <SelectionDeepDive />
       <VoiceValuedButton />
+      <LexyIntro />
 
       <nav
         className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-[#EDE8E0] bg-[#FEFCF8]/95 px-1 pt-1 pb-[calc(0.35rem+env(safe-area-inset-bottom))] backdrop-blur-md md:hidden"

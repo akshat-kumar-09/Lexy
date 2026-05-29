@@ -59,23 +59,6 @@ export function GenreStrip({ compact, className = "", variant = "light", hideBra
             domain. Lexy suggests words and metaphors in that neighborhood (including synonyms and fresh angles). Up to{" "}
             {MAX_GENRES} threads; not permanent, just what you&apos;re exploring now.
           </p>
-          <div className={`rounded-xl border px-3 py-2.5 text-[11px] leading-relaxed sm:text-xs ${isDark ? "border-[#3D3830] bg-[#252220]/80 text-[#C8BFB0]" : "border-[#EDE8E0] bg-[#FDFBF7] text-[#5c5550]"}`}>
-            <p className={`font-semibold ${isDark ? "text-[#8B7355]" : "text-[#8B7355]"}`}>How it works</p>
-            <ul className="mt-2 list-inside list-disc space-y-1.5 marker:text-[#8B7355]">
-              <li>
-                <strong className={isDark ? "text-[#F5EFE0]" : "text-[#1C1917]"}>Deep Dive</strong> proposes ~25 lemmas
-                tuned to your lexicon ratings — and half or more lean into your threads (near-synonyms, register, related
-                ideas).
-              </li>
-              <li>
-                <strong className={isDark ? "text-[#F5EFE0]" : "text-[#1C1917]"}>Metaphors</strong> imagines figurative
-                language in the same orbit — wearable images, not dictionary entries of your phrase.
-              </li>
-              <li>
-                Empty threads is fine: Lexy still follows ratings alone. Threads add <em>your</em> direction for the day.
-              </li>
-            </ul>
-          </div>
         </div>
         {threads.length > 0 && (
           <button
@@ -94,7 +77,7 @@ export function GenreStrip({ compact, className = "", variant = "light", hideBra
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), submit())}
-          placeholder="e.g. Sanatan Dharma · spiritual grammar · Greatness · monsoon mind…"
+          placeholder="e.g. Nature, Wealth, Discipline, Love, Self Realisation."
           className={`min-w-0 flex-1 ${inputCls}`}
           maxLength={120}
           aria-label="Add exploration thread"

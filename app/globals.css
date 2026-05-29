@@ -87,3 +87,54 @@ button {
 .snap-card {
   scroll-snap-align: start;
 }
+
+/* ── Welcome story (LexyIntro) ─────────────────────────────── */
+@keyframes lexy-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lexy-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes lexy-glow {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.lexy-rise {
+  animation: lexy-rise 0.62s cubic-bezier(0.16, 0.84, 0.44, 1) both;
+}
+
+.lexy-fade {
+  animation: lexy-fade 0.85s ease both;
+}
+
+.lexy-glow {
+  animation: lexy-glow 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lexy-rise,
+  .lexy-fade,
+  .lexy-glow {
+    animation: none;
+  }
+}
