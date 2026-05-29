@@ -83,9 +83,9 @@ export default function SettingsPage() {
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Settings</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
-          Your key is kept in this browser. When you&apos;re signed in, we also save it with your account (same secure
-          database as your lexicon) so it comes back after you close a tab or open Lexy on another device — you still
-          bring your own OpenAI usage; Lexy never uses a shared server key for you.
+          Enter your key once. It&apos;s remembered on this device in a long-lived secure cookie — so it survives even
+          when your phone clears app storage — and, when you&apos;re signed in, it&apos;s also saved with your account so
+          it follows you to other devices. You always bring your own OpenAI usage; Lexy never uses a shared key for you.
         </p>
       </div>
 
