@@ -22,6 +22,7 @@ function OpenAIKeyCloudSyncInner() {
   const [pullDone, setPullDone] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipPutAfterPull = useRef(false);
+  const lastPushedRef = useRef<string | null>(null);
 
   useEffect(() => {
     const p = useSettings.persist;
@@ -41,6 +42,7 @@ function OpenAIKeyCloudSyncInner() {
 
   useEffect(() => {
     setPullDone(false);
+    lastPushedRef.current = null;
   }, [userId]);
 
   useEffect(() => {
@@ -59,12 +61,16 @@ function OpenAIKeyCloudSyncInner() {
 
         if (serverKey && !localKey) {
           setOpenaiApiKey(serverKey);
+          lastPushedRef.current = serverKey;
+        } else {
+          lastPushedRef.current = localKey;
         }
-      } finally {
         if (!cancelled) {
           skipPutAfterPull.current = false;
           setPullDone(true);
         }
+      } catch (err) {
+        console.error("Failed to pull OpenAI key from cloud:", err);
       }
     })();
 
@@ -77,10 +83,13 @@ function OpenAIKeyCloudSyncInner() {
     if (!isLoaded || !userId || !settingsHydrated || !pullDone) return;
     if (skipPutAfterPull.current) return;
 
+    const k = openaiApiKey.trim();
+    if (k === lastPushedRef.current) return;
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
-      const k = useSettings.getState().openaiApiKey.trim();
+      lastPushedRef.current = k;
       void fetch("/api/user-secrets/openai", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

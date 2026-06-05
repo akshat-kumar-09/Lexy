@@ -38,6 +38,7 @@ export function OpenAIKeyCookieSync() {
         const localKey = useSettings.getState().openaiApiKey.trim();
         if (localKey) {
           lastPushed.current = localKey;
+          if (!cancelled) setPullDone(true);
           return;
         }
         const res = await fetch("/api/openai-key");
@@ -47,9 +48,12 @@ export function OpenAIKeyCookieSync() {
         if (cookieKey && !useSettings.getState().openaiApiKey.trim()) {
           lastPushed.current = cookieKey;
           setOpenaiApiKey(cookieKey);
+        } else {
+          lastPushed.current = "";
         }
-      } finally {
         if (!cancelled) setPullDone(true);
+      } catch (err) {
+        console.error("Failed to pull OpenAI key from cookie:", err);
       }
     })();
     return () => {

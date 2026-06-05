@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { COOKIE_NAME } from "@/lib/types";
 
 /**
  * Device-durable storage for the user's OpenAI key, independent of sign-in.
@@ -9,7 +10,6 @@ import { NextRequest, NextResponse } from "next/server";
  * but Lexy's own server (which already relays it to OpenAI on each request).
  */
 
-export const COOKIE_NAME = "lexy_oai";
 const MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 function isSecure() {

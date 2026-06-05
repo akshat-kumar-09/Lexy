@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { COOKIE_NAME } from "@/app/api/openai-key/route";
+import { COOKIE_NAME } from "@/lib/types";
 
 /** Proxies chat completions to OpenAI so the browser is not blocked by CORS. */
 export async function POST(req: NextRequest) {

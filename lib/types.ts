@@ -1,3 +1,5 @@
+export const COOKIE_NAME = "lexy_oai";
+
 export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily";
 
 export interface LexiconWord {
