@@ -67,7 +67,7 @@ export default function LexiconPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10 lg:max-w-6xl">
+    <div className="mx-auto max-w-4xl space-y-10 lg:max-w-7xl xl:max-w-[84rem]">
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">My Lexy</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">

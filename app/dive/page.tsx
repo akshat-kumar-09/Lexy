@@ -217,7 +217,7 @@ function DivePageContent() {
   const alreadySaved = Boolean(result && lexiconWords[result.word.toLowerCase()]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10 pb-8 lg:max-w-5xl">
+    <div className="mx-auto max-w-4xl space-y-10 pb-8 lg:max-w-6xl xl:max-w-7xl">
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Word Deep Dive</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
@@ -474,7 +474,7 @@ export default function DivePage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-3xl pb-8 font-serif text-sm italic text-[#B0A898] lg:max-w-5xl">Opening Deep Dive…</div>
+        <div className="mx-auto max-w-4xl pb-8 font-serif text-sm italic text-[#B0A898] lg:max-w-6xl xl:max-w-7xl">Opening Deep Dive…</div>
       }
     >
       <DivePageContent />

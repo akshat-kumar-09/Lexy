@@ -11,7 +11,7 @@ const cards = [
 
 export default function HomePage() {
   return (
-    <div className="mx-auto max-w-2xl space-y-7 sm:space-y-9 md:space-y-10 lg:max-w-4xl">
+    <div className="mx-auto max-w-3xl space-y-7 sm:space-y-9 md:space-y-10 lg:max-w-5xl xl:max-w-6xl">
       <FirstTimeBanner />
 
       <div className="space-y-2.5 sm:space-y-3">

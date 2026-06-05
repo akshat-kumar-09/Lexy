@@ -7,6 +7,28 @@
   --lexy-favourite: #1c7a40;
 }
 
+html {
+  font-size: 15px;
+}
+
+@media (min-width: 640px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1024px) {
+  html {
+    font-size: 17px;
+  }
+}
+
+@media (min-width: 1440px) {
+  html {
+    font-size: 18px;
+  }
+}
+
 @theme inline {
   --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-libre-baskerville), ui-serif, Georgia, serif;

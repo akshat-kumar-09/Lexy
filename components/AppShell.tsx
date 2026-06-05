@@ -23,7 +23,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-[#FEFCF8] text-[#1C1917] md:flex-row">
       <aside
-        className="hidden shrink-0 flex-col border-r border-[#2A2520] bg-[#1C1917] px-5 py-8 md:flex md:w-[220px]"
+        className="hidden shrink-0 flex-col border-r border-[#2A2520] bg-[#1C1917] px-6 py-10 md:flex md:w-[280px] md:h-screen md:sticky md:top-0"
         data-no-deep-dive
       >
         <Link href="/" className="font-serif text-2xl font-bold tracking-tight text-[#F5EFE0]">

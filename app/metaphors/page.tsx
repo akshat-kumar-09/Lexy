@@ -109,7 +109,7 @@ export default function MetaphorsPage() {
   useBodyScrollLock(metaphorDetailOpen);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 pb-8 lg:max-w-5xl">
+    <div className="mx-auto max-w-4xl space-y-8 pb-8 lg:max-w-6xl xl:max-w-7xl">
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Metaphors</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">

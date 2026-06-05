@@ -148,7 +148,7 @@ export default function ScribblePage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-10 xl:max-w-[84rem]">
       <div className="min-w-0 flex-1 space-y-8">
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Morning Scribble</h1>
