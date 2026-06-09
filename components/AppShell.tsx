@@ -13,6 +13,7 @@ const nav = [
   { href: "/", label: "Home", short: "Home" },
   { href: "/dive", label: "Deep dive", short: "Dive" },
   { href: "/metaphors", label: "Metaphor", short: "Metaphor" },
+  { href: "/articulate", label: "Articulate", short: "Speak" },
   { href: "/lexicon", label: "Lexicon", short: "Words" },
   { href: "/scribble", label: "Scribble", short: "Write" },
 ];

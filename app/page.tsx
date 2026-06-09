@@ -5,6 +5,7 @@ import Link from "next/link";
 const cards = [
   { href: "/dive", title: "Word Deep Dive" },
   { href: "/metaphors", title: "Metaphors" },
+  { href: "/articulate", title: "Articulate" },
   { href: "/lexicon", title: "My Lexy" },
   { href: "/scribble", title: "Morning Scribble" },
 ];
