@@ -1,0 +1,1459 @@
+diff --git a/.env.example b/.env.example
+index f0185fc..b15c979 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,5 +1,9 @@
+ # Copy to .env.local and fill in real values. Never commit .env.local.
+ 
++# Anthropic — https://console.anthropic.com/settings/keys
++# One shared server-side key. Powers Morning Scribble, Metaphors, and Deep Dive for every user; never exposed to the browser.
++ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
++
+ # Clerk — https://dashboard.clerk.com → API keys
+ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ CLERK_SECRET_KEY=sk_test_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+diff --git a/README.md b/README.md
+index b0cb9d9..6c1711d 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # Lexy
+ 
+-Personal vocabulary app (Next.js). Sign in with [Clerk](https://clerk.com) to sync your lexicon; your OpenAI API key stays in the browser only.
++Personal vocabulary app (Next.js). Sign in with [Clerk](https://clerk.com) to sync your lexicon; the app runs on a single shared Anthropic key configured by the deployer — no user ever needs their own key.
+ 
+ ## Quick start
+ 
+@@ -9,7 +9,7 @@ npm install
+ cp .env.example .env.local
+ ```
+ 
+-Fill `.env.local` with Clerk keys from the [Clerk dashboard](https://dashboard.clerk.com) and (for cloud sync) a [Neon](https://neon.tech) `DATABASE_URL`. In Neon’s SQL editor, run `scripts/neon-schema.sql` once.
++Fill `.env.local` with an `ANTHROPIC_API_KEY` (powers Morning Scribble, Metaphors, and Deep Dive for everyone), Clerk keys from the [Clerk dashboard](https://dashboard.clerk.com), and (for cloud sync) a [Neon](https://neon.tech) `DATABASE_URL`. In Neon’s SQL editor, run `scripts/neon-schema.sql` once.
+ 
+ ```bash
+ npm run dev
+@@ -32,6 +32,7 @@ git push -u origin main
+ 
+ 1. Push the repo and **Import** it in the [Vercel dashboard](https://vercel.com/new).
+ 2. **Environment variables** (Project → Settings → Environment Variables), for Production (and Preview if you use Clerk there too):
++   - `ANTHROPIC_API_KEY` (the one shared key — never exposed to the browser)
+    - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+    - `CLERK_SECRET_KEY`
+    - `DATABASE_URL` (Neon pooled connection string)
+@@ -41,5 +42,5 @@ git push -u origin main
+ ## Data & privacy
+ 
+ - **Lexicon (signed in):** Stored per Clerk user in your Postgres database (payload JSON).
+-- **OpenAI key:** Enter once. Kept on the device (a long-lived secure httpOnly cookie + `localStorage`) so it survives storage wipes, and—when signed in—saved per user in your database. It is relayed only by Lexy’s same-origin proxy to OpenAI on each request; Lexy never uses a shared key for you.
++- **Claude key:** One `ANTHROPIC_API_KEY` set on the server. It never reaches the browser — the client calls Lexy’s same-origin `/api/claude/chat` proxy, which attaches the shared key server-side on every request.
+ - **Exports:** Use **Download .txt** / **Download .json backup** on My Lexy, or **Import lexicon JSON** in Settings.
+diff --git a/app/api/claude/chat/route.ts b/app/api/claude/chat/route.ts
+new file mode 100644
+index 0000000..2edce29
+--- /dev/null
++++ b/app/api/claude/chat/route.ts
+@@ -0,0 +1,40 @@
++import { NextRequest, NextResponse } from "next/server";
++
++export const runtime = "edge";
++
++/**
++ * Proxies Messages API calls to Anthropic so the browser is not blocked by CORS.
++ * Uses Lexy's single shared server key — no user ever needs to bring their own.
++ */
++export async function POST(req: NextRequest) {
++  let body: Record<string, unknown>;
++  try {
++    body = await req.json();
++  } catch {
++    return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 });
++  }
++
++  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
++  if (!apiKey) {
++    return NextResponse.json(
++      { error: { message: "Lexy's server is missing its Claude key. Set ANTHROPIC_API_KEY." } },
++      { status: 500 }
++    );
++  }
++
++  const res = await fetch("https://api.anthropic.com/v1/messages", {
++    method: "POST",
++    headers: {
++      "x-api-key": apiKey,
++      "anthropic-version": "2023-06-01",
++      "Content-Type": "application/json",
++    },
++    body: JSON.stringify(body),
++  });
++
++  const text = await res.text();
++  return new NextResponse(text, {
++    status: res.status,
++    headers: { "Content-Type": "application/json" },
++  });
++}
+diff --git a/app/api/openai-key/route.ts b/app/api/openai-key/route.ts
+deleted file mode 100644
+index 53ac4e1..0000000
+--- a/app/api/openai-key/route.ts
++++ /dev/null
+@@ -1,49 +0,0 @@
+-import { NextRequest, NextResponse } from "next/server";
+-import { COOKIE_NAME } from "@/lib/types";
+-
+-/**
+- * Device-durable storage for the user's OpenAI key, independent of sign-in.
+- *
+- * The key lives in a 1-year httpOnly cookie. Server-set cookies are exempt from
+- * Safari/iOS' 7-day script-storage cap, so the key survives even when an
+- * installed PWA's localStorage is evicted. Same-origin only; never sent anywhere
+- * but Lexy's own server (which already relays it to OpenAI on each request).
+- */
+-
+-const MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+-
+-function isSecure() {
+-  return process.env.NODE_ENV === "production";
+-}
+-
+-/** GET: return the saved key for this device (null if none). */
+-export async function GET(req: NextRequest) {
+-  const key = req.cookies.get(COOKIE_NAME)?.value ?? null;
+-  return NextResponse.json({ key });
+-}
+-
+-/** POST: body `{ "key": "sk-..." }` — empty string clears the cookie. */
+-export async function POST(req: NextRequest) {
+-  let body: unknown;
+-  try {
+-    body = await req.json();
+-  } catch {
+-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+-  }
+-  const raw = (body as { key?: unknown }).key;
+-  const key = typeof raw === "string" ? raw.trim() : "";
+-
+-  const res = NextResponse.json({ ok: true });
+-  if (!key) {
+-    res.cookies.set(COOKIE_NAME, "", { path: "/", maxAge: 0 });
+-    return res;
+-  }
+-  res.cookies.set(COOKIE_NAME, key, {
+-    httpOnly: true,
+-    secure: isSecure(),
+-    sameSite: "lax",
+-    path: "/",
+-    maxAge: MAX_AGE,
+-  });
+-  return res;
+-}
+diff --git a/app/api/openai/chat/route.ts b/app/api/openai/chat/route.ts
+deleted file mode 100644
+index bdb5412..0000000
+--- a/app/api/openai/chat/route.ts
++++ /dev/null
+@@ -1,39 +0,0 @@
+-import { NextRequest, NextResponse } from "next/server";
+-import { COOKIE_NAME } from "@/lib/types";
+-
+-/** Proxies chat completions to OpenAI so the browser is not blocked by CORS. */
+-export async function POST(req: NextRequest) {
+-  let body: Record<string, unknown>;
+-  try {
+-    body = await req.json();
+-  } catch {
+-    return NextResponse.json({ error: { message: "Invalid JSON body" } }, { status: 400 });
+-  }
+-
+-  // Prefer the key sent by the client; fall back to the device cookie so calls
+-  // still work when localStorage was wiped but the durable cookie survived.
+-  const bodyKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
+-  const cookieKey = req.cookies.get(COOKIE_NAME)?.value?.trim() ?? "";
+-  const apiKey = bodyKey || cookieKey;
+-  if (!apiKey) {
+-    return NextResponse.json({ error: { message: "Missing OpenAI API key" } }, { status: 400 });
+-  }
+-
+-  const openaiPayload = { ...body };
+-  delete openaiPayload.apiKey;
+-
+-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+-    method: "POST",
+-    headers: {
+-      Authorization: `Bearer ${apiKey}`,
+-      "Content-Type": "application/json",
+-    },
+-    body: JSON.stringify(openaiPayload),
+-  });
+-
+-  const text = await res.text();
+-  return new NextResponse(text, {
+-    status: res.status,
+-    headers: { "Content-Type": "application/json" },
+-  });
+-}
+diff --git a/app/api/user-secrets/openai/route.ts b/app/api/user-secrets/openai/route.ts
+deleted file mode 100644
+index ddea27c..0000000
+--- a/app/api/user-secrets/openai/route.ts
++++ /dev/null
+@@ -1,61 +0,0 @@
+-import { auth } from "@clerk/nextjs/server";
+-import { getSql } from "@/lib/db";
+-import { NextResponse } from "next/server";
+-
+-/** GET: return saved key for this Clerk user (null if none). */
+-export async function GET() {
+-  const { userId } = await auth();
+-  if (!userId) {
+-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+-  }
+-  const sql = getSql();
+-  if (!sql) {
+-    return NextResponse.json({ key: null as string | null });
+-  }
+-  try {
+-    const rows = await sql`
+-      SELECT openai_api_key FROM user_secrets WHERE user_id = ${userId}
+-    `;
+-    const row = rows[0] as { openai_api_key: string } | undefined;
+-    return NextResponse.json({ key: row?.openai_api_key ?? null });
+-  } catch {
+-    return NextResponse.json({ key: null as string | null });
+-  }
+-}
+-
+-/** PUT: body `{ "key": "sk-..." }` — empty string deletes server copy. */
+-export async function PUT(req: Request) {
+-  const { userId } = await auth();
+-  if (!userId) {
+-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+-  }
+-  const sql = getSql();
+-  if (!sql) {
+-    return NextResponse.json({ error: "Database not configured" }, { status: 503 });
+-  }
+-  let body: unknown;
+-  try {
+-    body = await req.json();
+-  } catch {
+-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+-  }
+-  const key = typeof (body as { key?: unknown }).key === "string" ? (body as { key: string }).key.trim() : "";
+-
+-  try {
+-    if (!key) {
+-      await sql`DELETE FROM user_secrets WHERE user_id = ${userId}`;
+-      return NextResponse.json({ ok: true });
+-    }
+-    await sql`
+-      INSERT INTO user_secrets (user_id, openai_api_key, updated_at)
+-      VALUES (${userId}, ${key}, NOW())
+-      ON CONFLICT (user_id) DO UPDATE SET
+-        openai_api_key = EXCLUDED.openai_api_key,
+-        updated_at = NOW()
+-    `;
+-    return NextResponse.json({ ok: true });
+-  } catch (e) {
+-    console.error("user_secrets PUT", e);
+-    return NextResponse.json({ error: "Could not save key" }, { status: 500 });
+-  }
+-}
+diff --git a/app/dive/page.tsx b/app/dive/page.tsx
+index 01dc3e7..030a8bb 100644
+--- a/app/dive/page.tsx
++++ b/app/dive/page.tsx
+@@ -5,43 +5,17 @@ import { GenreStrip } from "@/components/GenreStrip";
+ import { IPA } from "@/components/IPA";
+ import { PronounceButton } from "@/components/PronounceButton";
+ import { RatingDial } from "@/components/RatingDial";
+-import { deepDiveWord, generateTasteGrid } from "@/lib/openai";
++import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
+ import { playLexiconChime } from "@/lib/sound";
+-import { tasteRatingsLine } from "@/lib/lexyCopy";
+-import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
+-import type { DeepDiveResult, LexiconWord, TasteGridWord } from "@/lib/types";
++import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
++import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
+ import { motion, AnimatePresence } from "framer-motion";
+ import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+ import Link from "next/link";
+ import { usePathname, useRouter, useSearchParams } from "next/navigation";
+ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+ 
+-function lexiconWordToFallback(w: LexiconWord): DeepDiveResult {
+-  const ex = w.example.trim();
+-  const def = w.definition.trim();
+-  const example_sentences = [
+-    ex || def || "—",
+-    def && def !== ex ? def : ex || def || "—",
+-    [ex, def].filter(Boolean).join(" ").trim() || "—",
+-  ].slice(0, 3);
+-
+-  return {
+-    word: w.word,
+-    pronunciation: w.pronunciation,
+-    part_of_speech: w.part_of_speech,
+-    definition: w.definition,
+-    nuance:
+-      "This is what you saved in your lexicon. Add your OpenAI API key in Settings anytime you want a fresh deep dive — nuance, richer examples, related forms, and etymology fetched anew.",
+-    example_sentences,
+-    origin: w.origin,
+-    related_words: [],
+-    used_by: "—",
+-    related_form_definitions: [],
+-  };
+-}
+-
+ function DivePageContent() {
+-  const apiKey = useSettings((s) => s.openaiApiKey);
+   const explorationThreads = useTasteProfile((s) => s.threads);
+   const upsertWord = useLexicon((s) => s.upsertWord);
+ 
+@@ -68,17 +42,13 @@ function DivePageContent() {
+   const [burst, setBurst] = useState(false);
+ 
+   const loadGrid = useCallback(async () => {
+-    if (!apiKey) {
+-      setSuggestions([]);
+-      return;
+-    }
+     setGridLoading(true);
+     setGridError(null);
+     try {
+       const words = useLexicon.getState().words;
+       const ctx = lastRatedRef.current ?? undefined;
+       lastRatedRef.current = null;
+-      const g = await generateTasteGrid(apiKey, words, ctx, explorationThreads);
++      const g = await generateTasteGrid(words, ctx, explorationThreads);
+       setSuggestions(g.suggestions);
+     } catch (e) {
+       setGridError(e instanceof Error ? e.message : "Could not refresh suggestions");
+@@ -86,39 +56,23 @@ function DivePageContent() {
+     } finally {
+       setGridLoading(false);
+     }
+-  }, [apiKey, explorationThreads]);
++  }, [explorationThreads]);
+ 
+   useEffect(() => {
+-    if (!apiKey) return;
+     void loadGrid();
+-  }, [apiKey, gridNonce, loadGrid, explorationThreads]);
++  }, [gridNonce, loadGrid, explorationThreads]);
+ 
+   const openDive = useCallback(async (lemma: string, hint?: TasteGridWord | null) => {
+     const trimmed = lemma.trim();
+     if (!trimmed) return;
+ 
+     setError(null);
+-
+-    if (!apiKey) {
+-      const saved = useLexicon.getState().words[trimmed.toLowerCase()];
+-      if (hint) setSelectedFromGrid(hint);
+-      else setSelectedFromGrid(null);
+-      if (saved) {
+-        setResult(lexiconWordToFallback(saved));
+-        setRating(saved.rating);
+-        return;
+-      }
+-      setError("Add your OpenAI API key in Settings — or open a word you already saved.");
+-      setResult(null);
+-      return;
+-    }
+-
+     setLoadingDive(true);
+     setResult(null);
+     if (hint) setSelectedFromGrid(hint);
+     else setSelectedFromGrid(null);
+     try {
+-      const r = await deepDiveWord(apiKey, trimmed);
++      const r = await deepDiveWord(trimmed);
+       setResult(r);
+       const saved = useLexicon.getState().words[trimmed.toLowerCase()];
+       setRating(saved?.rating ?? 7.5);
+@@ -127,7 +81,7 @@ function DivePageContent() {
+     } finally {
+       setLoadingDive(false);
+     }
+-  }, [apiKey]);
++  }, []);
+ 
+   useEffect(() => {
+     const raw = wordFromUrl?.trim();
+@@ -230,16 +184,6 @@ function DivePageContent() {
+ 
+       <GenreStrip compact />
+ 
+-      {!apiKey && (
+-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+-          <p>Add your OpenAI API key in Settings to load your taste grid and dive into words.</p>
+-          <p className="text-xs leading-relaxed text-amber-950/90">
+-            Without a key, opening a word from your lexicon still shows everything you saved — plus pronunciation playback.
+-          </p>
+-          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
+-        </div>
+-      )}
+-
+       <section className="space-y-4">
+         <div className="flex flex-wrap items-end justify-between gap-3">
+           <div>
+@@ -248,7 +192,7 @@ function DivePageContent() {
+           </div>
+           <button
+             type="button"
+-            disabled={!apiKey || gridLoading}
++            disabled={gridLoading}
+             onClick={refreshGridManual}
+             className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
+           >
+diff --git a/app/layout.tsx b/app/layout.tsx
+index bf67e29..f7005f1 100644
+--- a/app/layout.tsx
++++ b/app/layout.tsx
+@@ -5,8 +5,6 @@ import { DM_Sans, Libre_Baskerville } from "next/font/google";
+ import "./globals.css";
+ import { AppShell } from "@/components/AppShell";
+ import { LexiconCloudSync } from "@/components/LexiconCloudSync";
+-import { OpenAIKeyCloudSync } from "@/components/OpenAIKeyCloudSync";
+-import { OpenAIKeyCookieSync } from "@/components/OpenAIKeyCookieSync";
+ import { RegisterSW } from "@/components/RegisterSW";
+ 
+ const dmSans = DM_Sans({
+@@ -56,8 +54,6 @@ export default function RootLayout({
+           <RegisterSW />
+           <AppShell>{children}</AppShell>
+           <LexiconCloudSync />
+-          <OpenAIKeyCookieSync />
+-          <OpenAIKeyCloudSync />
+         </Providers>
+       </body>
+     </html>
+diff --git a/app/metaphors/page.tsx b/app/metaphors/page.tsx
+index 369ee98..0a2f7c0 100644
+--- a/app/metaphors/page.tsx
++++ b/app/metaphors/page.tsx
+@@ -3,17 +3,16 @@
+ import { AddWordBurst } from "@/components/AddWordBurst";
+ import { GenreStrip } from "@/components/GenreStrip";
+ import { RatingDial } from "@/components/RatingDial";
+-import { generateMetaphorGrid } from "@/lib/openai";
++import { generateMetaphorGrid } from "@/lib/claude";
+ import { playLexiconChime } from "@/lib/sound";
+-import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
++import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
+ import type { MetaphorGridItem } from "@/lib/types";
+ import { motion, AnimatePresence } from "framer-motion";
+-import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
++import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
+ import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+ import { useEffect, useMemo, useState } from "react";
+ 
+ export default function MetaphorsPage() {
+-  const apiKey = useSettings((s) => s.openaiApiKey);
+   const explorationThreads = useTasteProfile((s) => s.threads);
+   const metaphor_history = useLexicon((s) => s.metaphor_history);
+   const appendMetaphor = useLexicon((s) => s.appendMetaphor);
+@@ -33,8 +32,6 @@ export default function MetaphorsPage() {
+   const [burst, setBurst] = useState(false);
+ 
+   useEffect(() => {
+-    if (!apiKey) return;
+-
+     const existing = useLexicon.getState().metaphor_history.find((h) => h.date === today);
+     if (gridNonce === 0 && existing && existing.suggestions.length >= 10) {
+       return;
+@@ -55,7 +52,7 @@ export default function MetaphorsPage() {
+         const fromToday = cur?.suggestions.map((s) => s.metaphor) ?? [];
+         const exclude = [...new Set([...fromLex, ...fromToday])];
+ 
+-        const g = await generateMetaphorGrid(apiKey, w, explorationThreads, exclude);
++        const g = await generateMetaphorGrid(w, explorationThreads, exclude);
+         if (cancelled) return;
+         appendMetaphor({ date: today, suggestions: g.suggestions });
+       } catch (e) {
+@@ -68,7 +65,7 @@ export default function MetaphorsPage() {
+     return () => {
+       cancelled = true;
+     };
+-  }, [apiKey, today, gridNonce, explorationThreads, appendMetaphor]);
++  }, [today, gridNonce, explorationThreads, appendMetaphor]);
+ 
+   function refreshGrid() {
+     setGridNonce((n) => n + 1);
+@@ -120,60 +117,51 @@ export default function MetaphorsPage() {
+ 
+       <GenreStrip compact />
+ 
+-      {!apiKey && (
+-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+-          <p>Add your OpenAI API key in Settings to load metaphors.</p>
+-          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
+-        </div>
+-      )}
+-
+       {error && (
+         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>
+       )}
+ 
+-      {apiKey && (
+-        <section className="space-y-4">
+-          <div className="flex flex-wrap items-end justify-between gap-3">
+-            <div>
+-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Today&apos;s images</h2>
+-              <p className="mt-1 text-xs text-[#8B7355]">Ten fresh metaphors — new batch replaces today&apos;s set.</p>
+-            </div>
+-            <button
+-              type="button"
+-              disabled={loading}
+-              onClick={refreshGrid}
+-              className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
+-            >
+-              New batch
+-            </button>
++      <section className="space-y-4">
++        <div className="flex flex-wrap items-end justify-between gap-3">
++          <div>
++            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Today&apos;s images</h2>
++            <p className="mt-1 text-xs text-[#8B7355]">Ten fresh metaphors — new batch replaces today&apos;s set.</p>
+           </div>
++          <button
++            type="button"
++            disabled={loading}
++            onClick={refreshGrid}
++            className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
++          >
++            New batch
++          </button>
++        </div>
+ 
+-          {loading && list.length === 0 ? (
+-            <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
+-              Gathering ten metaphors that fit you…
+-            </div>
+-          ) : (
+-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+-              {list.map((m, idx) => (
+-                <button
+-                  key={`${m.metaphor}-${idx}`}
+-                  type="button"
+-                  onClick={() => openDetail(m)}
+-                  className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/45 sm:hover:shadow-md"
+-                >
+-                  <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
+-                  <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#6A6360]">{m.unpacking}</p>
+-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355]">Open →</p>
+-                </button>
+-              ))}
+-            </div>
+-          )}
++        {loading && list.length === 0 ? (
++          <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
++            Gathering ten metaphors that fit you…
++          </div>
++        ) : (
++          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
++            {list.map((m, idx) => (
++              <button
++                key={`${m.metaphor}-${idx}`}
++                type="button"
++                onClick={() => openDetail(m)}
++                className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/45 sm:hover:shadow-md"
++              >
++                <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
++                <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#6A6360]">{m.unpacking}</p>
++                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355]">Open →</p>
++              </button>
++            ))}
++          </div>
++        )}
+ 
+-          {loading && list.length > 0 && (
+-            <p className="text-center text-xs italic text-[#B0A898]">Refreshing your ten…</p>
+-          )}
+-        </section>
+-      )}
++        {loading && list.length > 0 && (
++          <p className="text-center text-xs italic text-[#B0A898]">Refreshing your ten…</p>
++        )}
++      </section>
+ 
+       <AnimatePresence>
+         {selected && (
+diff --git a/app/scribble/page.tsx b/app/scribble/page.tsx
+index e3f34b5..3606d89 100644
+--- a/app/scribble/page.tsx
++++ b/app/scribble/page.tsx
+@@ -4,10 +4,10 @@ import { AddWordBurst } from "@/components/AddWordBurst";
+ import { IPA } from "@/components/IPA";
+ import { RatingDial } from "@/components/RatingDial";
+ import { ScribbleLexiconSidebar } from "@/components/ScribbleLexiconSidebar";
+-import { analyseScribble, readHandwriting } from "@/lib/openai";
++import { analyseScribble, readHandwriting } from "@/lib/claude";
+ import { playLexiconChime } from "@/lib/sound";
+-import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
+-import { useLexicon, useSettings, todayISODate } from "@/lib/store";
++import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
++import { useLexicon, todayISODate } from "@/lib/store";
+ import type { ScribbleAnalysis, VocabularyCandidate } from "@/lib/types";
+ import { motion, AnimatePresence } from "framer-motion";
+ import Image from "next/image";
+@@ -31,7 +31,6 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
+ }
+ 
+ export default function ScribblePage() {
+-  const apiKey = useSettings((s) => s.openaiApiKey);
+   const upsertWord = useLexicon((s) => s.upsertWord);
+   const appendScribbleRewrite = useLexicon((s) => s.appendScribbleRewrite);
+   const scribble_rewrites = useLexicon((s) => s.scribble_rewrites);
+@@ -61,16 +60,12 @@ export default function ScribblePage() {
+   }, []);
+ 
+   async function handleReadPhoto() {
+-    if (!apiKey) {
+-      setError("Add your OpenAI API key in Settings first.");
+-      return;
+-    }
+     if (!file) return;
+     setLoadingRead(true);
+     setError(null);
+     try {
+       const { base64, mediaType } = await fileToBase64(file);
+-      const text = await readHandwriting(apiKey, base64, mediaType);
++      const text = await readHandwriting(base64, mediaType);
+       setRawText(text);
+     } catch (e) {
+       setError(e instanceof Error ? e.message : "Could not read handwriting");
+@@ -80,14 +75,10 @@ export default function ScribblePage() {
+   }
+ 
+   async function runAnalyse(text: string) {
+-    if (!apiKey) {
+-      setError("Add your OpenAI API key in Settings first.");
+-      return;
+-    }
+     setLoadingAnalyse(true);
+     setError(null);
+     try {
+-      const r = await analyseScribble(apiKey, text);
++      const r = await analyseScribble(text);
+       setResult(r);
+       appendScribbleRewrite({
+         id:
+@@ -158,13 +149,6 @@ export default function ScribblePage() {
+         </p>
+       </div>
+ 
+-      {!apiKey && (
+-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+-          <p>Add your OpenAI API key in Settings to read handwriting and analyse your writing.</p>
+-          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
+-        </div>
+-      )}
+-
+       {recentRewrites.length > 0 && (
+         <section className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0]/80 p-4 sm:p-5">
+           <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B7355]">Your saved rewrites</h2>
+diff --git a/app/settings/page.tsx b/app/settings/page.tsx
+index 43f9537..e266736 100644
+--- a/app/settings/page.tsx
++++ b/app/settings/page.tsx
+@@ -5,31 +5,18 @@ import Link from "next/link";
+ import { GenreStrip } from "@/components/GenreStrip";
+ import { SetupGifs } from "@/components/SetupGifs";
+ import { mergeLexiconPreferLocal } from "@/lib/lexiconMigrate";
+-import { importLexiconFromUnknown, useLexicon, useSettings } from "@/lib/store";
++import { importLexiconFromUnknown, useLexicon } from "@/lib/store";
+ import { clearSetupHintDismissed } from "@/lib/setupStorage";
+-import { useEffect, useRef, useState } from "react";
++import { useRef, useState } from "react";
+ 
+ const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+ 
+ export default function SettingsPage() {
+-  const { openaiApiKey, setOpenaiApiKey } = useSettings();
+   const importLexicon = useLexicon((s) => s.importLexicon);
+-  const [local, setLocal] = useState(openaiApiKey);
+-  const [saved, setSaved] = useState(false);
+   const [importMsg, setImportMsg] = useState<string | null>(null);
+   const fileRef = useRef<HTMLInputElement>(null);
+   const mergeFileRef = useRef<HTMLInputElement>(null);
+ 
+-  useEffect(() => {
+-    setLocal(openaiApiKey);
+-  }, [openaiApiKey]);
+-
+-  function save() {
+-    setOpenaiApiKey(local.trim());
+-    setSaved(true);
+-    setTimeout(() => setSaved(false), 2000);
+-  }
+-
+   function onPickJson(e: React.ChangeEvent<HTMLInputElement>) {
+     const file = e.target.files?.[0];
+     e.target.value = "";
+@@ -83,9 +70,8 @@ export default function SettingsPage() {
+       <div>
+         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Settings</h1>
+         <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
+-          Enter your key once. It&apos;s remembered on this device in a long-lived secure cookie — so it survives even
+-          when your phone clears app storage — and, when you&apos;re signed in, it&apos;s also saved with your account so
+-          it follows you to other devices. You always bring your own OpenAI usage; Lexy never uses a shared key for you.
++          Morning Scribble, Metaphors, and Deep Dive run on Lexy&apos;s own Claude key — nothing to set up, no key of
++          your own required.
+         </p>
+       </div>
+ 
+@@ -140,36 +126,6 @@ export default function SettingsPage() {
+         )}
+       </section>
+ 
+-      <section className="space-y-4">
+-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">OpenAI API key</h2>
+-        <div className="space-y-2">
+-          <label htmlFor="key" className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+-            Key (browser + account when signed in)
+-          </label>
+-          <input
+-            id="key"
+-            type="password"
+-            autoComplete="off"
+-            placeholder="sk-…"
+-            value={local}
+-            onChange={(e) => setLocal(e.target.value)}
+-            className="w-full rounded-xl border border-[#EDE8E0] bg-white px-4 py-3 text-sm text-[#1C1917] outline-none ring-[#8B7355]/20 focus:border-[#8B7355] focus:ring-4"
+-          />
+-        </div>
+-
+-        <button
+-          type="button"
+-          onClick={save}
+-          className="rounded-full bg-[#1C1917] px-8 py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920]"
+-        >
+-          {saved ? "Saved" : "Save key"}
+-        </button>
+-
+-        <p className="text-xs leading-relaxed text-[#B0A898]">
+-          Without a key, Morning Scribble, Metaphors, and Deep Dive stay idle. The lexicon works either way.
+-        </p>
+-      </section>
+-
+       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-6">
+         <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Exploration threads</h2>
+         <p className="text-sm leading-relaxed text-[#6A6360]">
+diff --git a/components/OpenAIKeyCloudSync.tsx b/components/OpenAIKeyCloudSync.tsx
+deleted file mode 100644
+index 4ac8b6c..0000000
+--- a/components/OpenAIKeyCloudSync.tsx
++++ /dev/null
+@@ -1,111 +0,0 @@
+-"use client";
+-
+-import { useAuth } from "@clerk/nextjs";
+-import { useSettings } from "@/lib/store";
+-import { useEffect, useRef, useState } from "react";
+-
+-const DEBOUNCE_MS = 900;
+-
+-function hasClerk() {
+-  return Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+-}
+-
+-/**
+- * When signed in + DB: pull key from server if local is empty after hydration; debounce-push local edits.
+- */
+-function OpenAIKeyCloudSyncInner() {
+-  const { userId, isLoaded } = useAuth();
+-  const openaiApiKey = useSettings((s) => s.openaiApiKey);
+-  const setOpenaiApiKey = useSettings((s) => s.setOpenaiApiKey);
+-  // SSR-safe: never touch `persist` synchronously during prerender.
+-  const [settingsHydrated, setSettingsHydrated] = useState(false);
+-  const [pullDone, setPullDone] = useState(false);
+-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+-  const skipPutAfterPull = useRef(false);
+-  const lastPushedRef = useRef<string | null>(null);
+-
+-  useEffect(() => {
+-    const p = useSettings.persist;
+-    if (!p) {
+-      setSettingsHydrated(true);
+-      return;
+-    }
+-    if (p.hasHydrated()) {
+-      setSettingsHydrated(true);
+-      return;
+-    }
+-    const unsub = p.onFinishHydration(() => {
+-      setSettingsHydrated(true);
+-    });
+-    return unsub;
+-  }, []);
+-
+-  useEffect(() => {
+-    setPullDone(false);
+-    lastPushedRef.current = null;
+-  }, [userId]);
+-
+-  useEffect(() => {
+-    if (!isLoaded || !userId || !settingsHydrated) return;
+-
+-    let cancelled = false;
+-    skipPutAfterPull.current = true;
+-
+-    (async () => {
+-      try {
+-        const res = await fetch("/api/user-secrets/openai");
+-        if (!res.ok || cancelled) return;
+-        const data = (await res.json()) as { key?: string | null };
+-        const serverKey = typeof data.key === "string" ? data.key.trim() : "";
+-        const localKey = useSettings.getState().openaiApiKey.trim();
+-
+-        if (serverKey && !localKey) {
+-          setOpenaiApiKey(serverKey);
+-          lastPushedRef.current = serverKey;
+-        } else {
+-          lastPushedRef.current = localKey;
+-        }
+-        if (!cancelled) {
+-          skipPutAfterPull.current = false;
+-          setPullDone(true);
+-        }
+-      } catch (err) {
+-        console.error("Failed to pull OpenAI key from cloud:", err);
+-      }
+-    })();
+-
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [isLoaded, userId, settingsHydrated, setOpenaiApiKey]);
+-
+-  useEffect(() => {
+-    if (!isLoaded || !userId || !settingsHydrated || !pullDone) return;
+-    if (skipPutAfterPull.current) return;
+-
+-    const k = openaiApiKey.trim();
+-    if (k === lastPushedRef.current) return;
+-
+-    if (debounceRef.current) clearTimeout(debounceRef.current);
+-    debounceRef.current = setTimeout(() => {
+-      debounceRef.current = null;
+-      lastPushedRef.current = k;
+-      void fetch("/api/user-secrets/openai", {
+-        method: "PUT",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ key: k }),
+-      });
+-    }, DEBOUNCE_MS);
+-
+-    return () => {
+-      if (debounceRef.current) clearTimeout(debounceRef.current);
+-    };
+-  }, [openaiApiKey, isLoaded, userId, settingsHydrated, pullDone]);
+-
+-  return null;
+-}
+-
+-export function OpenAIKeyCloudSync() {
+-  if (!hasClerk()) return null;
+-  return <OpenAIKeyCloudSyncInner />;
+-}
+diff --git a/components/OpenAIKeyCookieSync.tsx b/components/OpenAIKeyCookieSync.tsx
+deleted file mode 100644
+index 6c28275..0000000
+--- a/components/OpenAIKeyCookieSync.tsx
++++ /dev/null
+@@ -1,87 +0,0 @@
+-"use client";
+-
+-import { useSettings } from "@/lib/store";
+-import { useEffect, useRef, useState } from "react";
+-
+-const DEBOUNCE_MS = 700;
+-
+-/**
+- * Device-durable key sync (no sign-in required). On load, if the local store is
+- * empty, restore the key from the httpOnly cookie set by /api/openai-key; on
+- * edits, push the key back into that cookie. This keeps the key across sessions
+- * even when an installed PWA's localStorage is wiped by the browser.
+- */
+-export function OpenAIKeyCookieSync() {
+-  const openaiApiKey = useSettings((s) => s.openaiApiKey);
+-  const setOpenaiApiKey = useSettings((s) => s.setOpenaiApiKey);
+-
+-  const [settingsHydrated, setSettingsHydrated] = useState(false);
+-  const [pullDone, setPullDone] = useState(false);
+-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+-  const lastPushed = useRef<string | null>(null);
+-
+-  useEffect(() => {
+-    const p = useSettings.persist;
+-    if (!p || p.hasHydrated()) {
+-      setSettingsHydrated(true);
+-      return;
+-    }
+-    return p.onFinishHydration(() => setSettingsHydrated(true));
+-  }, []);
+-
+-  // Pull from cookie when local is empty.
+-  useEffect(() => {
+-    if (!settingsHydrated) return;
+-    let cancelled = false;
+-    (async () => {
+-      try {
+-        const localKey = useSettings.getState().openaiApiKey.trim();
+-        if (localKey) {
+-          lastPushed.current = localKey;
+-          if (!cancelled) setPullDone(true);
+-          return;
+-        }
+-        const res = await fetch("/api/openai-key");
+-        if (!res.ok || cancelled) return;
+-        const data = (await res.json()) as { key?: string | null };
+-        const cookieKey = typeof data.key === "string" ? data.key.trim() : "";
+-        if (cookieKey && !useSettings.getState().openaiApiKey.trim()) {
+-          lastPushed.current = cookieKey;
+-          setOpenaiApiKey(cookieKey);
+-        } else {
+-          lastPushed.current = "";
+-        }
+-        if (!cancelled) setPullDone(true);
+-      } catch (err) {
+-        console.error("Failed to pull OpenAI key from cookie:", err);
+-      }
+-    })();
+-    return () => {
+-      cancelled = true;
+-    };
+-  }, [settingsHydrated, setOpenaiApiKey]);
+-
+-  // Push edits into the cookie (debounced).
+-  useEffect(() => {
+-    if (!settingsHydrated || !pullDone) return;
+-    const k = openaiApiKey.trim();
+-    if (k === lastPushed.current) return;
+-
+-    if (debounceRef.current) clearTimeout(debounceRef.current);
+-    debounceRef.current = setTimeout(() => {
+-      debounceRef.current = null;
+-      lastPushed.current = k;
+-      void fetch("/api/openai-key", {
+-        method: "POST",
+-        headers: { "Content-Type": "application/json" },
+-        body: JSON.stringify({ key: k }),
+-      });
+-    }, DEBOUNCE_MS);
+-
+-    return () => {
+-      if (debounceRef.current) clearTimeout(debounceRef.current);
+-    };
+-  }, [openaiApiKey, settingsHydrated, pullDone]);
+-
+-  return null;
+-}
+diff --git a/components/SetupGifs.tsx b/components/SetupGifs.tsx
+index 8728ea8..d001f4c 100644
+--- a/components/SetupGifs.tsx
++++ b/components/SetupGifs.tsx
+@@ -1,15 +1,11 @@
+ "use client";
+ 
+-import Link from "next/link";
+ import { useEffect, useState } from "react";
+ 
+-const OPENAI_KEYS_URL = "https://platform.openai.com/api-keys";
+-
+ /**
+  * Visual clips are optional — nothing is bundled in git. Add your own files under `public/onboarding/`:
+  * - install-ios.mp4 or .gif — Safari Share → Add to Home Screen
+  * - install-android.mp4 or .gif — Chrome ⋮ → Install / Add to home screen
+- * - openai-key.mp4 or .gif — screen recording at platform.openai.com/api-keys → Create
+  * Prefer short MP4s (StepMedia tries video first); GIFs work if img loads.
+  */
+ 
+@@ -62,9 +58,9 @@ function StepMedia({ videoSrc, gifSrc, label, caption }: StepMediaProps) {
+             Record your phone or desktop screen, export as MP4 or GIF, then save under{" "}
+             <code className="rounded bg-white px-1 py-0.5 text-[9px]">{hintPath}</code>
+             — use filenames such as{" "}
+-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-ios.mp4</code>,{" "}
+-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-android.mp4</code>,{" "}
+-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">openai-key.mp4</code>
++            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-ios.mp4</code>{" "}
++            or{" "}
++            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-android.mp4</code>
+             . Or skip media and follow the bullets.
+           </p>
+         </div>
+@@ -134,7 +130,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
+         <div>
+           <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Get started</h1>
+           <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
+-            Two quick setups — put Lexy on your home screen, then wake the AI once with your own key.
++            One quick setup — put Lexy on your home screen. The AI is ready immediately, no key required.
+           </p>
+         </div>
+       )}
+@@ -142,7 +138,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
+       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-5 sm:p-6">
+         <div className="flex flex-wrap items-center justify-between gap-2">
+           <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+-            1 · Add Lexy to your home screen
++            Add Lexy to your home screen
+           </h2>
+           <div className="flex rounded-full border border-[#EDE8E0] p-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
+             <button
+@@ -195,47 +191,6 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
+           />
+         </div>
+       </section>
+-
+-      <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-5 sm:p-6">
+-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+-          2 · Add intelligence (one time)
+-        </h2>
+-        <ul className="list-inside list-disc space-y-1 text-sm leading-relaxed text-[#4A4340]">
+-          <li>
+-            Open{" "}
+-            <a
+-              href={OPENAI_KEYS_URL}
+-              target="_blank"
+-              rel="noopener noreferrer"
+-              className="font-semibold text-[#8B7355] underline-offset-2 hover:underline"
+-            >
+-              OpenAI API keys
+-            </a>{" "}
+-            and sign in.
+-          </li>
+-          <li>Create a key, copy it, then paste it in Settings below — it stays in this browser only.</li>
+-        </ul>
+-        <div className="flex justify-center">
+-          <StepMedia
+-            videoSrc="/onboarding/openai-key.mp4"
+-            gifSrc="/onboarding/openai-key.gif"
+-            label="Creating an OpenAI API key"
+-            caption="Optional clip: platform.openai.com → API keys → Create."
+-          />
+-        </div>
+-        <p className="text-center text-xs text-[#B0A898]">
+-          {embedded ? (
+-            <>Paste your key in the field below on this page.</>
+-          ) : (
+-            <>
+-              <Link href="/settings" className="font-semibold text-[#8B7355] underline-offset-2 hover:underline">
+-                Open Settings
+-              </Link>{" "}
+-              to save your key.
+-            </>
+-          )}
+-        </p>
+-      </section>
+     </div>
+   );
+ }
+diff --git a/lib/openai.ts b/lib/claude.ts
+similarity index 77%
+rename from lib/openai.ts
+rename to lib/claude.ts
+index e7b337c..7268ef9 100644
+--- a/lib/openai.ts
++++ b/lib/claude.ts
+@@ -9,14 +9,24 @@ import type {
+   TasteGridWord,
+ } from "@/lib/types";
+ 
+-/** Same-origin proxy avoids browser CORS blocks on api.openai.com */
+-const CHAT = "/api/openai/chat";
++/** Same-origin proxy avoids browser CORS blocks on api.anthropic.com — server holds the one shared key. */
++const CHAT = "/api/claude/chat";
++const MODEL = "claude-haiku-4-5";
++
++const JSON_ONLY = "Respond with ONLY the JSON object — no markdown code fences, no commentary before or after.";
++
++function stripCodeFence(raw: string): string {
++  return raw
++    .trim()
++    .replace(/^```(?:json)?\s*/i, "")
++    .replace(/```\s*$/i, "")
++    .trim();
++}
+ 
+ async function chatJson<T>(
+-  apiKey: string,
+-  model: string,
+   system: string,
+   user: string,
++  maxTokens = 2048,
+   temperature = 0.4
+ ): Promise<T> {
+   const res = await fetch(CHAT, {
+@@ -25,40 +35,37 @@ async function chatJson<T>(
+       "Content-Type": "application/json",
+     },
+     body: JSON.stringify({
+-      apiKey,
+-      model,
+-      messages: [
+-        { role: "system", content: system },
+-        { role: "user", content: user },
+-      ],
++      model: MODEL,
++      max_tokens: maxTokens,
+       temperature,
+-      response_format: { type: "json_object" },
++      system,
++      messages: [{ role: "user", content: user }],
+     }),
+   });
+ 
+   const rawText = await res.text();
+   let data: {
+     error?: { message?: string };
+-    choices?: { message?: { content?: string } }[];
++    content?: { type: string; text?: string }[];
+   };
+   try {
+     data = JSON.parse(rawText) as typeof data;
+   } catch {
+-    throw new Error(rawText.slice(0, 280) || `OpenAI error ${res.status}`);
++    throw new Error(rawText.slice(0, 280) || `Claude error ${res.status}`);
+   }
+ 
+   if (!res.ok) {
+     const msg = data.error?.message ?? rawText.slice(0, 280);
+-    throw new Error(msg || `OpenAI error ${res.status}`);
++    throw new Error(msg || `Claude error ${res.status}`);
+   }
+ 
+-  const raw = data.choices?.[0]?.message?.content;
++  const block = data.content?.find((b) => b.type === "text");
++  const raw = block?.text;
+   if (!raw) throw new Error("Empty response from model");
+-  return JSON.parse(raw) as T;
++  return JSON.parse(stripCodeFence(raw)) as T;
+ }
+ 
+ export async function readHandwriting(
+-  apiKey: string,
+   base64: string,
+   mediaType: string
+ ): Promise<string> {
+@@ -68,33 +75,29 @@ export async function readHandwriting(
+       "Content-Type": "application/json",
+     },
+     body: JSON.stringify({
+-      apiKey,
+-      model: "gpt-4o",
++      model: MODEL,
++      max_tokens: 4000,
+       messages: [
+         {
+           role: "user",
+           content: [
+             {
+-              type: "text",
+-              text: "Read this handwritten text exactly as written. Preserve punctuation, line breaks, and voice. Output plain text only — no preamble.",
++              type: "image",
++              source: { type: "base64", media_type: mediaType, data: base64 },
+             },
+             {
+-              type: "image_url",
+-              image_url: {
+-                url: `data:${mediaType};base64,${base64}`,
+-                detail: "high",
+-              },
++              type: "text",
++              text: "Read this handwritten text exactly as written. Preserve punctuation, line breaks, and voice. Output plain text only — no preamble.",
+             },
+           ],
+         },
+       ],
+-      max_tokens: 4000,
+     }),
+   });
+   const rawText = await res.text();
+   let data: {
+     error?: { message?: string };
+-    choices?: { message?: { content?: string } }[];
++    content?: { type: string; text?: string }[];
+   };
+   try {
+     data = JSON.parse(rawText) as typeof data;
+@@ -104,12 +107,13 @@ export async function readHandwriting(
+   if (!res.ok) {
+     throw new Error(data.error?.message ?? `Vision error ${res.status}`);
+   }
+-  const text = data.choices?.[0]?.message?.content?.trim();
++  const block = data.content?.find((b) => b.type === "text");
++  const text = block?.text?.trim();
+   if (!text) throw new Error("Could not read handwriting");
+   return text;
+ }
+ 
+-const SCRIBBLE_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
++const SCRIBBLE_REWRITE_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
+ Analyse the user's morning writing and return ONLY valid JSON matching this shape:
+ {
+   "upgraded_version": "string — full text rewritten in richer, more precise language; same voice, elevated expression",
+@@ -120,7 +124,16 @@ Analyse the user's morning writing and return ONLY valid JSON matching this shap
+       "pronunciation": "IPA in slashes like /wɜːd/",
+       "why": "why this upgrade sharpens the line"
+     }
+-  ],
++  ]
++}
++Rules:
++- word_upgrades: exactly 4 or 5 items (pick the best four or five spots).
++- Keep their voice in upgraded_version; do not sound generic.
++${JSON_ONLY}`;
++
++const SCRIBBLE_IDEAS_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
++Analyse the user's morning writing and return ONLY valid JSON matching this shape:
++{
+   "key_idea_expansions": [
+     { "idea": "short label", "expansion": "beautiful expansion in 2-4 sentences" }
+   ],
+@@ -137,21 +150,26 @@ Analyse the user's morning writing and return ONLY valid JSON matching this shap
+   ]
+ }
+ Rules:
+-- word_upgrades: exactly 4 or 5 items (pick the best four or five spots).
+ - key_idea_expansions: 1 or 2 items.
+ - vocabulary_candidates: 5 or 6 words tied to their themes; every word MUST include IPA pronunciation.
+-- Keep their voice in upgraded_version; do not sound generic.`;
+-
+-export async function analyseScribble(
+-  apiKey: string,
+-  text: string
+-): Promise<ScribbleAnalysis> {
+-  return chatJson<ScribbleAnalysis>(
+-    apiKey,
+-    "gpt-4o-mini",
+-    SCRIBBLE_SYSTEM,
+-    `Morning scribble:\n\n${text}`
+-  );
++${JSON_ONLY}`;
++
++/** Two parallel completions (rewrite + ideas/vocab) so wall-clock time tracks the slower call instead of one long one. */
++export async function analyseScribble(text: string): Promise<ScribbleAnalysis> {
++  const user = `Morning scribble:\n\n${text}`;
++  const [rewrite, ideas] = await Promise.all([
++    chatJson<Pick<ScribbleAnalysis, "upgraded_version" | "word_upgrades">>(
++      SCRIBBLE_REWRITE_SYSTEM,
++      user,
++      2048
++    ),
++    chatJson<Pick<ScribbleAnalysis, "key_idea_expansions" | "vocabulary_candidates">>(
++      SCRIBBLE_IDEAS_SYSTEM,
++      user,
++      2048
++    ),
++  ]);
++  return { ...rewrite, ...ideas };
+ }
+ 
+ function metaphorGridSystem(itemCount: number): string {
+@@ -172,7 +190,8 @@ Rules:
+ - Each item needs all fields. example_sentences must have exactly 3 strings.
+ - Metaphors must be distinct — no near-duplicates.
+ - Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).
+-- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).`;
++- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).
++${JSON_ONLY}`;
+ }
+ 
+ function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set<string>): MetaphorGridItem[] {
+@@ -194,7 +213,6 @@ function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set
+  * Uses two parallel API requests (5 + 5) so latency tracks the slower call.
+  */
+ export async function generateMetaphorGrid(
+-  apiKey: string,
+   lexicon: Record<string, LexiconWord>,
+   explorationThreads: string[] = [],
+   excludeMetaphors: string[] = []
+@@ -224,8 +242,8 @@ Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’
+ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (another completion supplied batch A). Fresh, specific; clichés only if subverted.`;
+ 
+   const [rawA, rawB] = await Promise.all([
+-    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5a, user5a, 0.72),
+-    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5b, user5b, 0.72),
++    chatJson<MetaphorGridResponse>(system5a, user5a, 2048, 0.72),
++    chatJson<MetaphorGridResponse>(system5b, user5b, 2048, 0.72),
+   ]);
+ 
+   const suggestions = mergeMetaphorSuggestions(
+@@ -238,10 +256,9 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
+   if (suggestions.length < 10) {
+     const need = 10 - suggestions.length;
+     const fill = await chatJson<MetaphorGridResponse>(
+-      apiKey,
+-      "gpt-4o-mini",
+       `${baseSystem10}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
+       `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
++      2048,
+       0.68
+     );
+     for (const s of fill.suggestions ?? []) {
+@@ -284,7 +301,8 @@ Rules:
+ - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
+ - Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
+ - If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.
+-- Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).`;
++- Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).
++${JSON_ONLY}`;
+ }
+ 
+ function mergeTasteSuggestions(
+@@ -311,7 +329,6 @@ function mergeTasteSuggestions(
+  * Uses two parallel API requests (13 + 12 words) so wall-clock time tracks the slower call instead of one huge completion.
+  */
+ export async function generateTasteGrid(
+-  apiKey: string,
+   lexicon: Record<string, LexiconWord>,
+   context?: { lastRatedWord?: string; lastRating?: number },
+   explorationThreads: string[] = []
+@@ -344,8 +361,8 @@ Return ONLY batch A: exactly 13 NEW words — half of a 25-word taste grid (anot
+ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (another completion supplied batch A).`;
+ 
+   const [rawA, rawB] = await Promise.all([
+-    chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system13, user13, 0.75),
+-    chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system12, user12, 0.75),
++    chatJson<{ suggestions: TasteGridWord[] }>(system13, user13, 2560, 0.75),
++    chatJson<{ suggestions: TasteGridWord[] }>(system12, user12, 2560, 0.75),
+   ]);
+ 
+   const filtered = mergeTasteSuggestions(
+@@ -358,10 +375,9 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
+   if (filtered.length < 25) {
+     const need = 25 - filtered.length;
+     const fill = await chatJson<{ suggestions: TasteGridWord[] }>(
+-      apiKey,
+-      "gpt-4o-mini",
+       `${baseSystem25}\nThe merged batches had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
+       `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${threadBlock}`,
++      2560,
+       0.7
+     );
+     for (const s of fill.suggestions ?? []) {
+@@ -374,11 +390,7 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
+   return { suggestions: filtered.slice(0, 25) };
+ }
+ 
+-export async function deepDiveWord(
+-  apiKey: string,
+-  word: string
+-): Promise<DeepDiveResult> {
+-  const system = `You are Lexy. Return ONLY valid JSON:
++const DEEP_DIVE_CORE_SYSTEM = `You are Lexy. Return ONLY valid JSON:
+ {
+   "word": "the word",
+   "pronunciation": "IPA with slashes",
+@@ -386,7 +398,13 @@ export async function deepDiveWord(
+   "definition": "precise definition",
+   "nuance": "what this word captures that near-synonyms do not",
+   "example_sentences": ["three sentences"],
+-  "origin": "etymology",
++  "origin": "etymology"
++}
++All fields required. example_sentences length 3. Pronunciation mandatory.
++${JSON_ONLY}`;
++
++const DEEP_DIVE_EXTRAS_SYSTEM = `You are Lexy. Return ONLY valid JSON:
++{
+   "related_words": ["three related words"],
+   "used_by": "a memorable literary appearance — author or work",
+   "related_form_definitions": [
+@@ -394,13 +412,28 @@ export async function deepDiveWord(
+   ]
+ }
+ All fields required except you may omit related_form_definitions if truly none exist (prefer including them).
+-example_sentences length 3. related_words length 3. Pronunciation mandatory.
+-related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].`;
+-
+-  return chatJson<DeepDiveResult>(
+-    apiKey,
+-    "gpt-4o-mini",
+-    system,
+-    `Full story of the word: "${word.trim()}"`
+-  );
++related_words length 3.
++related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].
++${JSON_ONLY}`;
++
++/** Two parallel completions (core facts + related/etymology extras) so wall-clock latency tracks the slower half, not the sum. */
++export async function deepDiveWord(word: string): Promise<DeepDiveResult> {
++  const trimmed = word.trim();
++  const user = `Full story of the word: "${trimmed}"`;
++
++  const [core, extras] = await Promise.all([
++    chatJson<Omit<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
++      DEEP_DIVE_CORE_SYSTEM,
++      user,
++      1536
++    ),
++    chatJson<Pick<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
++      DEEP_DIVE_EXTRAS_SYSTEM,
++      user,
++      1536,
++      0.5
++    ),
++  ]);
++
++  return { ...core, ...extras };
+ }
+diff --git a/lib/store.ts b/lib/store.ts
+index 7b5d2fe..317d083 100644
+--- a/lib/store.ts
++++ b/lib/store.ts
+@@ -18,25 +18,6 @@ import { persist, createJSONStorage } from "zustand/middleware";
+ 
+ const empty: LexiconData = { words: {}, metaphor_history: [], scribble_rewrites: [] };
+ 
+-export interface SettingsState {
+-  openaiApiKey: string;
+-  setOpenaiApiKey: (k: string) => void;
+-}
+-
+-export const useSettings = create<SettingsState>()(
+-  persist(
+-    (set) => ({
+-      openaiApiKey: "",
+-      setOpenaiApiKey: (openaiApiKey) => set({ openaiApiKey }),
+-    }),
+-    {
+-      name: "lexy-settings",
+-      storage: createJSONStorage(() => localStorage),
+-      partialize: (s) => ({ openaiApiKey: s.openaiApiKey }),
+-    }
+-  )
+-);
+-
+ interface LexiconStore extends LexiconData {
+   /**
+    * Word keys the user removed locally but the server may not yet have heard
+diff --git a/lib/types.ts b/lib/types.ts
+index bcbc7de..626ce8d 100644
+--- a/lib/types.ts
++++ b/lib/types.ts
+@@ -1,5 +1,3 @@
+-export const COOKIE_NAME = "lexy_oai";
+-
+ export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily";
+ 
+ export interface LexiconWord {
+diff --git a/scripts/neon-schema.sql b/scripts/neon-schema.sql
+index 1ba572d..3865c2f 100644
+--- a/scripts/neon-schema.sql
++++ b/scripts/neon-schema.sql
+@@ -6,10 +6,3 @@ CREATE TABLE IF NOT EXISTS lexicon_snapshots (
+ );
+ 
+ CREATE INDEX IF NOT EXISTS lexicon_snapshots_updated_at_idx ON lexicon_snapshots (updated_at DESC);
+-
+--- Optional OpenAI key per signed-in user (HTTPS + Clerk only; run if you use cloud restore).
+-CREATE TABLE IF NOT EXISTS user_secrets (
+-  user_id TEXT PRIMARY KEY,
+-  openai_api_key TEXT NOT NULL,
+-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-);
