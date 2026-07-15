@@ -5,43 +5,17 @@ import { GenreStrip } from "@/components/GenreStrip";
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
 import { RatingDial } from "@/components/RatingDial";
-import { deepDiveWord, generateTasteGrid } from "@/lib/openai";
+import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
-import { tasteRatingsLine } from "@/lib/lexyCopy";
-import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
-import type { DeepDiveResult, LexiconWord, TasteGridWord } from "@/lib/types";
+import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
+import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
-function lexiconWordToFallback(w: LexiconWord): DeepDiveResult {
-  const ex = w.example.trim();
-  const def = w.definition.trim();
-  const example_sentences = [
-    ex || def || "—",
-    def && def !== ex ? def : ex || def || "—",
-    [ex, def].filter(Boolean).join(" ").trim() || "—",
-  ].slice(0, 3);
-
-  return {
-    word: w.word,
-    pronunciation: w.pronunciation,
-    part_of_speech: w.part_of_speech,
-    definition: w.definition,
-    nuance:
-      "This is what you saved in your lexicon. Add your OpenAI API key in Settings anytime you want a fresh deep dive — nuance, richer examples, related forms, and etymology fetched anew.",
-    example_sentences,
-    origin: w.origin,
-    related_words: [],
-    used_by: "—",
-    related_form_definitions: [],
-  };
-}
-
 function DivePageContent() {
-  const apiKey = useSettings((s) => s.openaiApiKey);
   const explorationThreads = useTasteProfile((s) => s.threads);
   const upsertWord = useLexicon((s) => s.upsertWord);
 
@@ -68,17 +42,13 @@ function DivePageContent() {
   const [burst, setBurst] = useState(false);
 
   const loadGrid = useCallback(async () => {
-    if (!apiKey) {
-      setSuggestions([]);
-      return;
-    }
     setGridLoading(true);
     setGridError(null);
     try {
       const words = useLexicon.getState().words;
       const ctx = lastRatedRef.current ?? undefined;
       lastRatedRef.current = null;
-      const g = await generateTasteGrid(apiKey, words, ctx, explorationThreads);
+      const g = await generateTasteGrid(words, ctx, explorationThreads);
       setSuggestions(g.suggestions);
     } catch (e) {
       setGridError(e instanceof Error ? e.message : "Could not refresh suggestions");
@@ -86,39 +56,23 @@ function DivePageContent() {
     } finally {
       setGridLoading(false);
     }
-  }, [apiKey, explorationThreads]);
+  }, [explorationThreads]);
 
   useEffect(() => {
-    if (!apiKey) return;
     void loadGrid();
-  }, [apiKey, gridNonce, loadGrid, explorationThreads]);
+  }, [gridNonce, loadGrid, explorationThreads]);
 
   const openDive = useCallback(async (lemma: string, hint?: TasteGridWord | null) => {
     const trimmed = lemma.trim();
     if (!trimmed) return;
 
     setError(null);
-
-    if (!apiKey) {
-      const saved = useLexicon.getState().words[trimmed.toLowerCase()];
-      if (hint) setSelectedFromGrid(hint);
-      else setSelectedFromGrid(null);
-      if (saved) {
-        setResult(lexiconWordToFallback(saved));
-        setRating(saved.rating);
-        return;
-      }
-      setError("Add your OpenAI API key in Settings — or open a word you already saved.");
-      setResult(null);
-      return;
-    }
-
     setLoadingDive(true);
     setResult(null);
     if (hint) setSelectedFromGrid(hint);
     else setSelectedFromGrid(null);
     try {
-      const r = await deepDiveWord(apiKey, trimmed);
+      const r = await deepDiveWord(trimmed);
       setResult(r);
       const saved = useLexicon.getState().words[trimmed.toLowerCase()];
       setRating(saved?.rating ?? 7.5);
@@ -127,7 +81,7 @@ function DivePageContent() {
     } finally {
       setLoadingDive(false);
     }
-  }, [apiKey]);
+  }, []);
 
   useEffect(() => {
     const raw = wordFromUrl?.trim();
@@ -230,16 +184,6 @@ function DivePageContent() {
 
       <GenreStrip compact />
 
-      {!apiKey && (
-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>Add your OpenAI API key in Settings to load your taste grid and dive into words.</p>
-          <p className="text-xs leading-relaxed text-amber-950/90">
-            Without a key, opening a word from your lexicon still shows everything you saved — plus pronunciation playback.
-          </p>
-          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
-        </div>
-      )}
-
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -248,7 +192,7 @@ function DivePageContent() {
           </div>
           <button
             type="button"
-            disabled={!apiKey || gridLoading}
+            disabled={gridLoading}
             onClick={refreshGridManual}
             className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
           >

@@ -9,14 +9,24 @@ import type {
   TasteGridWord,
 } from "@/lib/types";
 
-/** Same-origin proxy avoids browser CORS blocks on api.openai.com */
-const CHAT = "/api/openai/chat";
+/** Same-origin proxy avoids browser CORS blocks on api.anthropic.com — server holds the one shared key. */
+const CHAT = "/api/claude/chat";
+const MODEL = "claude-haiku-4-5";
+
+const JSON_ONLY = "Respond with ONLY the JSON object — no markdown code fences, no commentary before or after.";
+
+function stripCodeFence(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+}
 
 async function chatJson<T>(
-  apiKey: string,
-  model: string,
   system: string,
   user: string,
+  maxTokens = 2048,
   temperature = 0.4
 ): Promise<T> {
   const res = await fetch(CHAT, {
@@ -25,40 +35,37 @@ async function chatJson<T>(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      apiKey,
-      model,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
+      model: MODEL,
+      max_tokens: maxTokens,
       temperature,
-      response_format: { type: "json_object" },
+      system,
+      messages: [{ role: "user", content: user }],
     }),
   });
 
   const rawText = await res.text();
   let data: {
     error?: { message?: string };
-    choices?: { message?: { content?: string } }[];
+    content?: { type: string; text?: string }[];
   };
   try {
     data = JSON.parse(rawText) as typeof data;
   } catch {
-    throw new Error(rawText.slice(0, 280) || `OpenAI error ${res.status}`);
+    throw new Error(rawText.slice(0, 280) || `Claude error ${res.status}`);
   }
 
   if (!res.ok) {
     const msg = data.error?.message ?? rawText.slice(0, 280);
-    throw new Error(msg || `OpenAI error ${res.status}`);
+    throw new Error(msg || `Claude error ${res.status}`);
   }
 
-  const raw = data.choices?.[0]?.message?.content;
+  const block = data.content?.find((b) => b.type === "text");
+  const raw = block?.text;
   if (!raw) throw new Error("Empty response from model");
-  return JSON.parse(raw) as T;
+  return JSON.parse(stripCodeFence(raw)) as T;
 }
 
 export async function readHandwriting(
-  apiKey: string,
   base64: string,
   mediaType: string
 ): Promise<string> {
@@ -68,33 +75,29 @@ export async function readHandwriting(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      apiKey,
-      model: "gpt-4o",
+      model: MODEL,
+      max_tokens: 4000,
       messages: [
         {
           role: "user",
           content: [
             {
-              type: "text",
-              text: "Read this handwritten text exactly as written. Preserve punctuation, line breaks, and voice. Output plain text only — no preamble.",
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: base64 },
             },
             {
-              type: "image_url",
-              image_url: {
-                url: `data:${mediaType};base64,${base64}`,
-                detail: "high",
-              },
+              type: "text",
+              text: "Read this handwritten text exactly as written. Preserve punctuation, line breaks, and voice. Output plain text only — no preamble.",
             },
           ],
         },
       ],
-      max_tokens: 4000,
     }),
   });
   const rawText = await res.text();
   let data: {
     error?: { message?: string };
-    choices?: { message?: { content?: string } }[];
+    content?: { type: string; text?: string }[];
   };
   try {
     data = JSON.parse(rawText) as typeof data;
@@ -104,12 +107,13 @@ export async function readHandwriting(
   if (!res.ok) {
     throw new Error(data.error?.message ?? `Vision error ${res.status}`);
   }
-  const text = data.choices?.[0]?.message?.content?.trim();
+  const block = data.content?.find((b) => b.type === "text");
+  const text = block?.text?.trim();
   if (!text) throw new Error("Could not read handwriting");
   return text;
 }
 
-const SCRIBBLE_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
+const SCRIBBLE_REWRITE_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
 Analyse the user's morning writing and return ONLY valid JSON matching this shape:
 {
   "upgraded_version": "string — full text rewritten in richer, more precise language; same voice, elevated expression",
@@ -120,7 +124,16 @@ Analyse the user's morning writing and return ONLY valid JSON matching this shap
       "pronunciation": "IPA in slashes like /wɜːd/",
       "why": "why this upgrade sharpens the line"
     }
-  ],
+  ]
+}
+Rules:
+- word_upgrades: exactly 4 or 5 items (pick the best four or five spots).
+- Keep their voice in upgraded_version; do not sound generic.
+${JSON_ONLY}`;
+
+const SCRIBBLE_IDEAS_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
+Analyse the user's morning writing and return ONLY valid JSON matching this shape:
+{
   "key_idea_expansions": [
     { "idea": "short label", "expansion": "beautiful expansion in 2-4 sentences" }
   ],
@@ -137,21 +150,26 @@ Analyse the user's morning writing and return ONLY valid JSON matching this shap
   ]
 }
 Rules:
-- word_upgrades: exactly 4 or 5 items (pick the best four or five spots).
 - key_idea_expansions: 1 or 2 items.
 - vocabulary_candidates: 5 or 6 words tied to their themes; every word MUST include IPA pronunciation.
-- Keep their voice in upgraded_version; do not sound generic.`;
+${JSON_ONLY}`;
 
-export async function analyseScribble(
-  apiKey: string,
-  text: string
-): Promise<ScribbleAnalysis> {
-  return chatJson<ScribbleAnalysis>(
-    apiKey,
-    "gpt-4o-mini",
-    SCRIBBLE_SYSTEM,
-    `Morning scribble:\n\n${text}`
-  );
+/** Two parallel completions (rewrite + ideas/vocab) so wall-clock time tracks the slower call instead of one long one. */
+export async function analyseScribble(text: string): Promise<ScribbleAnalysis> {
+  const user = `Morning scribble:\n\n${text}`;
+  const [rewrite, ideas] = await Promise.all([
+    chatJson<Pick<ScribbleAnalysis, "upgraded_version" | "word_upgrades">>(
+      SCRIBBLE_REWRITE_SYSTEM,
+      user,
+      2048
+    ),
+    chatJson<Pick<ScribbleAnalysis, "key_idea_expansions" | "vocabulary_candidates">>(
+      SCRIBBLE_IDEAS_SYSTEM,
+      user,
+      2048
+    ),
+  ]);
+  return { ...rewrite, ...ideas };
 }
 
 function metaphorGridSystem(itemCount: number): string {
@@ -172,7 +190,8 @@ Rules:
 - Each item needs all fields. example_sentences must have exactly 3 strings.
 - Metaphors must be distinct — no near-duplicates.
 - Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).
-- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).`;
+- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).
+${JSON_ONLY}`;
 }
 
 function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set<string>): MetaphorGridItem[] {
@@ -194,7 +213,6 @@ function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set
  * Uses two parallel API requests (5 + 5) so latency tracks the slower call.
  */
 export async function generateMetaphorGrid(
-  apiKey: string,
   lexicon: Record<string, LexiconWord>,
   explorationThreads: string[] = [],
   excludeMetaphors: string[] = []
@@ -224,8 +242,8 @@ Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’
 Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (another completion supplied batch A). Fresh, specific; clichés only if subverted.`;
 
   const [rawA, rawB] = await Promise.all([
-    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5a, user5a, 0.72),
-    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5b, user5b, 0.72),
+    chatJson<MetaphorGridResponse>(system5a, user5a, 2048, 0.72),
+    chatJson<MetaphorGridResponse>(system5b, user5b, 2048, 0.72),
   ]);
 
   const suggestions = mergeMetaphorSuggestions(
@@ -238,10 +256,9 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
   if (suggestions.length < 10) {
     const need = 10 - suggestions.length;
     const fill = await chatJson<MetaphorGridResponse>(
-      apiKey,
-      "gpt-4o-mini",
       `${baseSystem10}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
       `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
+      2048,
       0.68
     );
     for (const s of fill.suggestions ?? []) {
@@ -284,7 +301,8 @@ Rules:
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
 - Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
 - If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.
-- Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).`;
+- Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).
+${JSON_ONLY}`;
 }
 
 function mergeTasteSuggestions(
@@ -311,7 +329,6 @@ function mergeTasteSuggestions(
  * Uses two parallel API requests (13 + 12 words) so wall-clock time tracks the slower call instead of one huge completion.
  */
 export async function generateTasteGrid(
-  apiKey: string,
   lexicon: Record<string, LexiconWord>,
   context?: { lastRatedWord?: string; lastRating?: number },
   explorationThreads: string[] = []
@@ -344,8 +361,8 @@ Return ONLY batch A: exactly 13 NEW words — half of a 25-word taste grid (anot
 Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (another completion supplied batch A).`;
 
   const [rawA, rawB] = await Promise.all([
-    chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system13, user13, 0.75),
-    chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system12, user12, 0.75),
+    chatJson<{ suggestions: TasteGridWord[] }>(system13, user13, 2560, 0.75),
+    chatJson<{ suggestions: TasteGridWord[] }>(system12, user12, 2560, 0.75),
   ]);
 
   const filtered = mergeTasteSuggestions(
@@ -358,10 +375,9 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
   if (filtered.length < 25) {
     const need = 25 - filtered.length;
     const fill = await chatJson<{ suggestions: TasteGridWord[] }>(
-      apiKey,
-      "gpt-4o-mini",
       `${baseSystem25}\nThe merged batches had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
       `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${threadBlock}`,
+      2560,
       0.7
     );
     for (const s of fill.suggestions ?? []) {
@@ -374,11 +390,7 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
   return { suggestions: filtered.slice(0, 25) };
 }
 
-export async function deepDiveWord(
-  apiKey: string,
-  word: string
-): Promise<DeepDiveResult> {
-  const system = `You are Lexy. Return ONLY valid JSON:
+const DEEP_DIVE_CORE_SYSTEM = `You are Lexy. Return ONLY valid JSON:
 {
   "word": "the word",
   "pronunciation": "IPA with slashes",
@@ -386,7 +398,13 @@ export async function deepDiveWord(
   "definition": "precise definition",
   "nuance": "what this word captures that near-synonyms do not",
   "example_sentences": ["three sentences"],
-  "origin": "etymology",
+  "origin": "etymology"
+}
+All fields required. example_sentences length 3. Pronunciation mandatory.
+${JSON_ONLY}`;
+
+const DEEP_DIVE_EXTRAS_SYSTEM = `You are Lexy. Return ONLY valid JSON:
+{
   "related_words": ["three related words"],
   "used_by": "a memorable literary appearance — author or work",
   "related_form_definitions": [
@@ -394,13 +412,28 @@ export async function deepDiveWord(
   ]
 }
 All fields required except you may omit related_form_definitions if truly none exist (prefer including them).
-example_sentences length 3. related_words length 3. Pronunciation mandatory.
-related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].`;
+related_words length 3.
+related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].
+${JSON_ONLY}`;
 
-  return chatJson<DeepDiveResult>(
-    apiKey,
-    "gpt-4o-mini",
-    system,
-    `Full story of the word: "${word.trim()}"`
-  );
+/** Two parallel completions (core facts + related/etymology extras) so wall-clock latency tracks the slower half, not the sum. */
+export async function deepDiveWord(word: string): Promise<DeepDiveResult> {
+  const trimmed = word.trim();
+  const user = `Full story of the word: "${trimmed}"`;
+
+  const [core, extras] = await Promise.all([
+    chatJson<Omit<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
+      DEEP_DIVE_CORE_SYSTEM,
+      user,
+      1536
+    ),
+    chatJson<Pick<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
+      DEEP_DIVE_EXTRAS_SYSTEM,
+      user,
+      1536,
+      0.5
+    ),
+  ]);
+
+  return { ...core, ...extras };
 }

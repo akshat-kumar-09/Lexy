@@ -5,8 +5,6 @@ import { DM_Sans, Libre_Baskerville } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/AppShell";
 import { LexiconCloudSync } from "@/components/LexiconCloudSync";
-import { OpenAIKeyCloudSync } from "@/components/OpenAIKeyCloudSync";
-import { OpenAIKeyCookieSync } from "@/components/OpenAIKeyCookieSync";
 import { RegisterSW } from "@/components/RegisterSW";
 
 const dmSans = DM_Sans({
@@ -56,8 +54,6 @@ export default function RootLayout({
           <RegisterSW />
           <AppShell>{children}</AppShell>
           <LexiconCloudSync />
-          <OpenAIKeyCookieSync />
-          <OpenAIKeyCloudSync />
         </Providers>
       </body>
     </html>

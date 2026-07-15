@@ -5,30 +5,17 @@ import Link from "next/link";
 import { GenreStrip } from "@/components/GenreStrip";
 import { SetupGifs } from "@/components/SetupGifs";
 import { mergeLexiconPreferLocal } from "@/lib/lexiconMigrate";
-import { importLexiconFromUnknown, useLexicon, useSettings } from "@/lib/store";
+import { importLexiconFromUnknown, useLexicon } from "@/lib/store";
 import { clearSetupHintDismissed } from "@/lib/setupStorage";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
 export default function SettingsPage() {
-  const { openaiApiKey, setOpenaiApiKey } = useSettings();
   const importLexicon = useLexicon((s) => s.importLexicon);
-  const [local, setLocal] = useState(openaiApiKey);
-  const [saved, setSaved] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const mergeFileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setLocal(openaiApiKey);
-  }, [openaiApiKey]);
-
-  function save() {
-    setOpenaiApiKey(local.trim());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
 
   function onPickJson(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -83,9 +70,8 @@ export default function SettingsPage() {
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Settings</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
-          Enter your key once. It&apos;s remembered on this device in a long-lived secure cookie — so it survives even
-          when your phone clears app storage — and, when you&apos;re signed in, it&apos;s also saved with your account so
-          it follows you to other devices. You always bring your own OpenAI usage; Lexy never uses a shared key for you.
+          Morning Scribble, Metaphors, and Deep Dive run on Lexy&apos;s own Claude key — nothing to set up, no key of
+          your own required.
         </p>
       </div>
 
@@ -138,36 +124,6 @@ export default function SettingsPage() {
             </SignedIn>
           </>
         )}
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">OpenAI API key</h2>
-        <div className="space-y-2">
-          <label htmlFor="key" className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
-            Key (browser + account when signed in)
-          </label>
-          <input
-            id="key"
-            type="password"
-            autoComplete="off"
-            placeholder="sk-…"
-            value={local}
-            onChange={(e) => setLocal(e.target.value)}
-            className="w-full rounded-xl border border-[#EDE8E0] bg-white px-4 py-3 text-sm text-[#1C1917] outline-none ring-[#8B7355]/20 focus:border-[#8B7355] focus:ring-4"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={save}
-          className="rounded-full bg-[#1C1917] px-8 py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920]"
-        >
-          {saved ? "Saved" : "Save key"}
-        </button>
-
-        <p className="text-xs leading-relaxed text-[#B0A898]">
-          Without a key, Morning Scribble, Metaphors, and Deep Dive stay idle. The lexicon works either way.
-        </p>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-6">

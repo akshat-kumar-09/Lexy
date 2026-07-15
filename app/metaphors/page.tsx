@@ -3,17 +3,16 @@
 import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
 import { RatingDial } from "@/components/RatingDial";
-import { generateMetaphorGrid } from "@/lib/openai";
+import { generateMetaphorGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
-import { useLexicon, useSettings, useTasteProfile, todayISODate } from "@/lib/store";
+import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
 import type { MetaphorGridItem } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
-import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
+import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useEffect, useMemo, useState } from "react";
 
 export default function MetaphorsPage() {
-  const apiKey = useSettings((s) => s.openaiApiKey);
   const explorationThreads = useTasteProfile((s) => s.threads);
   const metaphor_history = useLexicon((s) => s.metaphor_history);
   const appendMetaphor = useLexicon((s) => s.appendMetaphor);
@@ -33,8 +32,6 @@ export default function MetaphorsPage() {
   const [burst, setBurst] = useState(false);
 
   useEffect(() => {
-    if (!apiKey) return;
-
     const existing = useLexicon.getState().metaphor_history.find((h) => h.date === today);
     if (gridNonce === 0 && existing && existing.suggestions.length >= 10) {
       return;
@@ -55,7 +52,7 @@ export default function MetaphorsPage() {
         const fromToday = cur?.suggestions.map((s) => s.metaphor) ?? [];
         const exclude = [...new Set([...fromLex, ...fromToday])];
 
-        const g = await generateMetaphorGrid(apiKey, w, explorationThreads, exclude);
+        const g = await generateMetaphorGrid(w, explorationThreads, exclude);
         if (cancelled) return;
         appendMetaphor({ date: today, suggestions: g.suggestions });
       } catch (e) {
@@ -68,7 +65,7 @@ export default function MetaphorsPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiKey, today, gridNonce, explorationThreads, appendMetaphor]);
+  }, [today, gridNonce, explorationThreads, appendMetaphor]);
 
   function refreshGrid() {
     setGridNonce((n) => n + 1);
@@ -120,60 +117,51 @@ export default function MetaphorsPage() {
 
       <GenreStrip compact />
 
-      {!apiKey && (
-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>Add your OpenAI API key in Settings to load metaphors.</p>
-          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
-        </div>
-      )}
-
       {error && (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>
       )}
 
-      {apiKey && (
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Today&apos;s images</h2>
-              <p className="mt-1 text-xs text-[#8B7355]">Ten fresh metaphors — new batch replaces today&apos;s set.</p>
-            </div>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={refreshGrid}
-              className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
-            >
-              New batch
-            </button>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Today&apos;s images</h2>
+            <p className="mt-1 text-xs text-[#8B7355]">Ten fresh metaphors — new batch replaces today&apos;s set.</p>
           </div>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={refreshGrid}
+            className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
+          >
+            New batch
+          </button>
+        </div>
 
-          {loading && list.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
-              Gathering ten metaphors that fit you…
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {list.map((m, idx) => (
-                <button
-                  key={`${m.metaphor}-${idx}`}
-                  type="button"
-                  onClick={() => openDetail(m)}
-                  className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/45 sm:hover:shadow-md"
-                >
-                  <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
-                  <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#6A6360]">{m.unpacking}</p>
-                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355]">Open →</p>
-                </button>
-              ))}
-            </div>
-          )}
+        {loading && list.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
+            Gathering ten metaphors that fit you…
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {list.map((m, idx) => (
+              <button
+                key={`${m.metaphor}-${idx}`}
+                type="button"
+                onClick={() => openDetail(m)}
+                className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/45 sm:hover:shadow-md"
+              >
+                <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
+                <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#6A6360]">{m.unpacking}</p>
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355]">Open →</p>
+              </button>
+            ))}
+          </div>
+        )}
 
-          {loading && list.length > 0 && (
-            <p className="text-center text-xs italic text-[#B0A898]">Refreshing your ten…</p>
-          )}
-        </section>
-      )}
+        {loading && list.length > 0 && (
+          <p className="text-center text-xs italic text-[#B0A898]">Refreshing your ten…</p>
+        )}
+      </section>
 
       <AnimatePresence>
         {selected && (

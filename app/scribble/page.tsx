@@ -4,10 +4,10 @@ import { AddWordBurst } from "@/components/AddWordBurst";
 import { IPA } from "@/components/IPA";
 import { RatingDial } from "@/components/RatingDial";
 import { ScribbleLexiconSidebar } from "@/components/ScribbleLexiconSidebar";
-import { analyseScribble, readHandwriting } from "@/lib/openai";
+import { analyseScribble, readHandwriting } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
-import { FAVOURITE_THRESHOLD, tasteRatingsLine } from "@/lib/lexyCopy";
-import { useLexicon, useSettings, todayISODate } from "@/lib/store";
+import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
+import { useLexicon, todayISODate } from "@/lib/store";
 import type { ScribbleAnalysis, VocabularyCandidate } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
@@ -31,7 +31,6 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
 }
 
 export default function ScribblePage() {
-  const apiKey = useSettings((s) => s.openaiApiKey);
   const upsertWord = useLexicon((s) => s.upsertWord);
   const appendScribbleRewrite = useLexicon((s) => s.appendScribbleRewrite);
   const scribble_rewrites = useLexicon((s) => s.scribble_rewrites);
@@ -61,16 +60,12 @@ export default function ScribblePage() {
   }, []);
 
   async function handleReadPhoto() {
-    if (!apiKey) {
-      setError("Add your OpenAI API key in Settings first.");
-      return;
-    }
     if (!file) return;
     setLoadingRead(true);
     setError(null);
     try {
       const { base64, mediaType } = await fileToBase64(file);
-      const text = await readHandwriting(apiKey, base64, mediaType);
+      const text = await readHandwriting(base64, mediaType);
       setRawText(text);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not read handwriting");
@@ -80,14 +75,10 @@ export default function ScribblePage() {
   }
 
   async function runAnalyse(text: string) {
-    if (!apiKey) {
-      setError("Add your OpenAI API key in Settings first.");
-      return;
-    }
     setLoadingAnalyse(true);
     setError(null);
     try {
-      const r = await analyseScribble(apiKey, text);
+      const r = await analyseScribble(text);
       setResult(r);
       appendScribbleRewrite({
         id:
@@ -157,13 +148,6 @@ export default function ScribblePage() {
           clearly afterward — and surfaces words worth keeping.
         </p>
       </div>
-
-      {!apiKey && (
-        <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p>Add your OpenAI API key in Settings to read handwriting and analyse your writing.</p>
-          <p className="text-xs leading-relaxed text-amber-950/90">{tasteRatingsLine()}</p>
-        </div>
-      )}
 
       {recentRewrites.length > 0 && (
         <section className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0]/80 p-4 sm:p-5">

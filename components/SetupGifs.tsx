@@ -1,15 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-
-const OPENAI_KEYS_URL = "https://platform.openai.com/api-keys";
 
 /**
  * Visual clips are optional — nothing is bundled in git. Add your own files under `public/onboarding/`:
  * - install-ios.mp4 or .gif — Safari Share → Add to Home Screen
  * - install-android.mp4 or .gif — Chrome ⋮ → Install / Add to home screen
- * - openai-key.mp4 or .gif — screen recording at platform.openai.com/api-keys → Create
  * Prefer short MP4s (StepMedia tries video first); GIFs work if img loads.
  */
 
@@ -62,9 +58,9 @@ function StepMedia({ videoSrc, gifSrc, label, caption }: StepMediaProps) {
             Record your phone or desktop screen, export as MP4 or GIF, then save under{" "}
             <code className="rounded bg-white px-1 py-0.5 text-[9px]">{hintPath}</code>
             — use filenames such as{" "}
-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-ios.mp4</code>,{" "}
-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-android.mp4</code>,{" "}
-            <code className="rounded bg-white px-1 py-0.5 text-[9px]">openai-key.mp4</code>
+            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-ios.mp4</code>{" "}
+            or{" "}
+            <code className="rounded bg-white px-1 py-0.5 text-[9px]">install-android.mp4</code>
             . Or skip media and follow the bullets.
           </p>
         </div>
@@ -134,7 +130,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
         <div>
           <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Get started</h1>
           <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
-            Two quick setups — put Lexy on your home screen, then wake the AI once with your own key.
+            One quick setup — put Lexy on your home screen. The AI is ready immediately, no key required.
           </p>
         </div>
       )}
@@ -142,7 +138,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
-            1 · Add Lexy to your home screen
+            Add Lexy to your home screen
           </h2>
           <div className="flex rounded-full border border-[#EDE8E0] p-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
             <button
@@ -194,47 +190,6 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
             }
           />
         </div>
-      </section>
-
-      <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-5 sm:p-6">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
-          2 · Add intelligence (one time)
-        </h2>
-        <ul className="list-inside list-disc space-y-1 text-sm leading-relaxed text-[#4A4340]">
-          <li>
-            Open{" "}
-            <a
-              href={OPENAI_KEYS_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-[#8B7355] underline-offset-2 hover:underline"
-            >
-              OpenAI API keys
-            </a>{" "}
-            and sign in.
-          </li>
-          <li>Create a key, copy it, then paste it in Settings below — it stays in this browser only.</li>
-        </ul>
-        <div className="flex justify-center">
-          <StepMedia
-            videoSrc="/onboarding/openai-key.mp4"
-            gifSrc="/onboarding/openai-key.gif"
-            label="Creating an OpenAI API key"
-            caption="Optional clip: platform.openai.com → API keys → Create."
-          />
-        </div>
-        <p className="text-center text-xs text-[#B0A898]">
-          {embedded ? (
-            <>Paste your key in the field below on this page.</>
-          ) : (
-            <>
-              <Link href="/settings" className="font-semibold text-[#8B7355] underline-offset-2 hover:underline">
-                Open Settings
-              </Link>{" "}
-              to save your key.
-            </>
-          )}
-        </p>
       </section>
     </div>
   );

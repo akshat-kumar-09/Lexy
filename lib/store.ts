@@ -18,25 +18,6 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 const empty: LexiconData = { words: {}, metaphor_history: [], scribble_rewrites: [] };
 
-export interface SettingsState {
-  openaiApiKey: string;
-  setOpenaiApiKey: (k: string) => void;
-}
-
-export const useSettings = create<SettingsState>()(
-  persist(
-    (set) => ({
-      openaiApiKey: "",
-      setOpenaiApiKey: (openaiApiKey) => set({ openaiApiKey }),
-    }),
-    {
-      name: "lexy-settings",
-      storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ openaiApiKey: s.openaiApiKey }),
-    }
-  )
-);
-
 interface LexiconStore extends LexiconData {
   /**
    * Word keys the user removed locally but the server may not yet have heard
