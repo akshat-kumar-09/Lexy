@@ -27,6 +27,41 @@ function parseDeletedWords(data: unknown): string[] {
 
 const EMPTY: LexiconData = { words: {}, metaphor_history: [], scribble_rewrites: [] };
 
+/** Checkpoints are cheap (JSONB copy) but bounded — one per 6h window, last 30 kept. */
+const HISTORY_MIN_GAP_HOURS = 6;
+const HISTORY_KEEP = 30;
+
+async function maybeWriteHistoryCheckpoint(
+  sql: ReturnType<typeof getSql>,
+  userId: string,
+  payload: LexiconData
+) {
+  if (!sql) return;
+  // Skip empty snapshots — nothing worth a rollback point.
+  if (!Object.keys(payload.words).length) return;
+  const recent = await sql`
+    SELECT created_at FROM lexicon_history
+    WHERE user_id = ${userId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `;
+  const last = (recent[0] as { created_at: string } | undefined)?.created_at;
+  if (last && Date.now() - new Date(last).getTime() < HISTORY_MIN_GAP_HOURS * 60 * 60 * 1000) {
+    return;
+  }
+  await sql`
+    INSERT INTO lexicon_history (user_id, payload)
+    VALUES (${userId}, ${JSON.stringify(payload)}::jsonb)
+  `;
+  await sql`
+    DELETE FROM lexicon_history
+    WHERE user_id = ${userId}
+      AND id NOT IN (
+        SELECT id FROM lexicon_history WHERE user_id = ${userId} ORDER BY created_at DESC LIMIT ${HISTORY_KEEP}
+      )
+  `;
+}
+
 export async function GET() {
   const { userId } = await auth();
   if (!userId) {
@@ -99,6 +134,15 @@ export async function PUT(req: Request) {
     for (const k of deletedWords) {
       delete merged.words[k];
     }
+  }
+
+  // Checkpoint the pre-write state before overwriting it, so a bad merge or
+  // wrong-device sync is always recoverable from Settings. Best-effort: if the
+  // history table isn't migrated yet, don't let that break the actual save.
+  try {
+    await maybeWriteHistoryCheckpoint(sql, userId, existing);
+  } catch (e) {
+    console.error("lexicon_history checkpoint failed", e);
   }
 
   const payload = JSON.stringify(merged);

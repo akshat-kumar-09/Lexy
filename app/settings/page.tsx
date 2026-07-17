@@ -1,15 +1,121 @@
 "use client";
 
-import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { GenreStrip } from "@/components/GenreStrip";
 import { SetupGifs } from "@/components/SetupGifs";
 import { mergeLexiconPreferLocal } from "@/lib/lexiconMigrate";
 import { importLexiconFromUnknown, useLexicon } from "@/lib/store";
 import { clearSetupHintDismissed } from "@/lib/setupStorage";
-import { useRef, useState } from "react";
+import type { LexiconData } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
 
 const clerkConfigured = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+
+interface Checkpoint {
+  id: number;
+  created_at: string;
+  word_count: number;
+}
+
+function formatCheckpointTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function CloudCheckpoints() {
+  const { isLoaded, userId } = useAuth();
+  const importLexicon = useLexicon((s) => s.importLexicon);
+  const [checkpoints, setCheckpoints] = useState<Checkpoint[] | null>(null);
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isLoaded || !userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/lexicon/history");
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as { checkpoints?: Checkpoint[] };
+        if (!cancelled) setCheckpoints(data.checkpoints ?? []);
+      } catch {
+        if (!cancelled) setCheckpoints([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoaded, userId]);
+
+  async function restore(id: number) {
+    if (restoringId != null) return;
+    setRestoringId(id);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/lexicon/history/${id}`, { method: "POST" });
+      if (!res.ok) {
+        setMsg("Could not restore that checkpoint — try again in a moment.");
+        return;
+      }
+      const restored = (await res.json()) as LexiconData;
+      importLexicon(restored);
+      setMsg("Restored. Missing words are brought back; nothing you already have was removed.");
+    } catch {
+      setMsg("Could not restore that checkpoint — try again in a moment.");
+    } finally {
+      setRestoringId(null);
+    }
+  }
+
+  if (!isLoaded || !userId) return null;
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-[#EDE8E0] bg-white p-6">
+      <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Cloud checkpoints</h2>
+      <p className="text-sm leading-relaxed text-[#6A6360]">
+        Lexy quietly saves a checkpoint of your account&apos;s lexicon every few hours. If a sync ever goes wrong — a
+        device mix-up, an accidental mass-delete — restore brings missing words back without ever removing anything
+        you currently have.
+      </p>
+      {checkpoints === null && <p className="text-xs italic text-[#B0A898]">Loading checkpoints…</p>}
+      {checkpoints?.length === 0 && (
+        <p className="text-xs italic text-[#B0A898]">
+          No checkpoints yet — one is saved automatically the next time your lexicon changes.
+        </p>
+      )}
+      {checkpoints && checkpoints.length > 0 && (
+        <ul className="space-y-2">
+          {checkpoints.map((c) => (
+            <li
+              key={c.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F5F0EA] px-4 py-2.5"
+            >
+              <span className="text-sm text-[#4A4340]">
+                {formatCheckpointTime(c.created_at)} · {c.word_count} word{c.word_count === 1 ? "" : "s"}
+              </span>
+              <button
+                type="button"
+                disabled={restoringId === c.id}
+                onClick={() => void restore(c.id)}
+                className="rounded-full border border-[#8B7355] px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355] disabled:opacity-50"
+              >
+                {restoringId === c.id ? "Restoring…" : "Restore"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {msg && <p className="text-sm text-[#6A6360]">{msg}</p>}
+    </section>
+  );
+}
 
 export default function SettingsPage() {
   const importLexicon = useLexicon((s) => s.importLexicon);
@@ -170,6 +276,8 @@ export default function SettingsPage() {
         </div>
         {importMsg && <p className="text-sm text-[#6A6360]">{importMsg}</p>}
       </section>
+
+      {clerkConfigured && <CloudCheckpoints />}
     </div>
   );
 }
