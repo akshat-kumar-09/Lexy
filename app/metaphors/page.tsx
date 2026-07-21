@@ -52,7 +52,12 @@ export default function MetaphorsPage() {
         const fromToday = cur?.suggestions.map((s) => s.metaphor) ?? [];
         const exclude = [...new Set([...fromLex, ...fromToday])];
 
-        const g = await generateMetaphorGrid(w, explorationThreads, exclude);
+        let accumulated: MetaphorGridItem[] = [];
+        const g = await generateMetaphorGrid(w, explorationThreads, exclude, (batch) => {
+          if (cancelled) return;
+          accumulated = [...accumulated, ...batch];
+          appendMetaphor({ date: today, suggestions: accumulated });
+        });
         if (cancelled) return;
         appendMetaphor({ date: today, suggestions: g.suggestions });
       } catch (e) {
