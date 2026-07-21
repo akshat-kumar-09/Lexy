@@ -206,9 +206,9 @@ function DivePageContent() {
             type="button"
             disabled={gridLoading}
             onClick={refreshGridManual}
-            className="rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-40"
+            className={`rounded-full border border-[#EDE8E0] px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-[#6A6360] hover:border-[#8B7355] disabled:opacity-70 ${gridLoading ? "lexy-chase" : ""}`}
           >
-            New batch
+            {gridLoading ? "Curating…" : "New batch"}
           </button>
         </div>
 
