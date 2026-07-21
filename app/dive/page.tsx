@@ -36,6 +36,7 @@ function DivePageContent() {
   const [selectedFromGrid, setSelectedFromGrid] = useState<TasteGridWord | null>(null);
   const [query, setQuery] = useState("");
   const [loadingDive, setLoadingDive] = useState(false);
+  const [extrasPending, setExtrasPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DeepDiveResult | null>(null);
   const [rating, setRating] = useState(7.5);
@@ -44,11 +45,14 @@ function DivePageContent() {
   const loadGrid = useCallback(async () => {
     setGridLoading(true);
     setGridError(null);
+    setSuggestions([]);
     try {
       const words = useLexicon.getState().words;
       const ctx = lastRatedRef.current ?? undefined;
       lastRatedRef.current = null;
-      const g = await generateTasteGrid(words, ctx, explorationThreads);
+      const g = await generateTasteGrid(words, ctx, explorationThreads, (batch) => {
+        setSuggestions((prev) => [...prev, ...batch]);
+      });
       setSuggestions(g.suggestions);
     } catch (e) {
       setGridError(e instanceof Error ? e.message : "Could not refresh suggestions");
@@ -68,11 +72,18 @@ function DivePageContent() {
 
     setError(null);
     setLoadingDive(true);
+    setExtrasPending(false);
     setResult(null);
     if (hint) setSelectedFromGrid(hint);
     else setSelectedFromGrid(null);
     try {
-      const r = await deepDiveWord(trimmed);
+      const r = await deepDiveWord(trimmed, (core) => {
+        // Core facts land first — show the word immediately instead of waiting on
+        // related words/etymology too.
+        setResult({ ...core, related_words: [], used_by: "", related_form_definitions: [] });
+        setLoadingDive(false);
+        setExtrasPending(true);
+      });
       setResult(r);
       const saved = useLexicon.getState().words[trimmed.toLowerCase()];
       setRating(saved?.rating ?? 7.5);
@@ -80,6 +91,7 @@ function DivePageContent() {
       setError(e instanceof Error ? e.message : "Could not dive into that word");
     } finally {
       setLoadingDive(false);
+      setExtrasPending(false);
     }
   }, []);
 
@@ -243,47 +255,52 @@ function DivePageContent() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[100] bg-[#1C1917]/35 backdrop-blur-[2px] md:hidden"
+              className="fixed inset-0 z-[100] bg-[#1C1917]/35 backdrop-blur-[2px]"
               onClick={closeDiveDetail}
               aria-hidden
             />
-            <motion.section
-              key="dive-panel"
-              initial={{ opacity: 0, y: 28 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 420, damping: 34 }}
-              className="space-y-5 border-[#EDE8E0] max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-[110] max-md:max-h-[min(92dvh,calc(100dvh-3.5rem))] max-md:overflow-y-auto max-md:overflow-x-hidden max-md:rounded-t-2xl max-md:border max-md:border-b-0 max-md:bg-[#FEFCF8] max-md:px-4 max-md:pb-[max(1rem,env(safe-area-inset-bottom))] max-md:pt-3 max-md:shadow-[0_-12px_40px_rgba(0,0,0,0.14)] md:relative md:border-t md:pt-8"
-              role="dialog"
-              aria-modal="true"
-              aria-label={loadingDive ? "Loading word details" : result ? `Details for ${result.word}` : "Word details"}
+            <div
+              className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-4"
+              onClick={closeDiveDetail}
             >
-              <div className="relative flex h-11 shrink-0 items-center border-b border-[#F5F0EA] md:hidden">
-                <div className="pointer-events-none absolute inset-x-0 flex justify-center pt-2">
-                  <div className="h-1 w-10 rounded-full bg-[#D4CCC0]" aria-hidden />
+              <motion.section
+                key="dive-panel"
+                initial={{ opacity: 0, scale: 0.95, y: 24 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 16 }}
+                transition={{ type: "spring", stiffness: 460, damping: 34 }}
+                onClick={(e) => e.stopPropagation()}
+                className="max-h-[min(92dvh,calc(100dvh-3.5rem))] w-full max-w-2xl space-y-5 overflow-y-auto overflow-x-hidden rounded-t-2xl border border-b-0 border-[#EDE8E0] bg-[#FEFCF8] px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_rgba(0,0,0,0.14)] sm:rounded-2xl sm:border-b sm:p-6 sm:shadow-2xl"
+                role="dialog"
+                aria-modal="true"
+                aria-label={loadingDive ? "Loading word details" : result ? `Details for ${result.word}` : "Word details"}
+              >
+                <div className="relative flex h-11 shrink-0 items-center border-b border-[#F5F0EA] sm:h-auto sm:border-b-0">
+                  <div className="pointer-events-none absolute inset-x-0 flex justify-center pt-2 sm:hidden">
+                    <div className="h-1 w-10 rounded-full bg-[#D4CCC0]" aria-hidden />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeDiveDetail}
+                    disabled={loadingDive}
+                    className="relative z-10 ml-auto min-h-10 shrink-0 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.1em] text-[#8B7355] active:bg-[#F5EFE0] disabled:opacity-40 sm:hover:bg-[#F5EFE0]"
+                  >
+                    Close
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeDiveDetail}
-                  disabled={loadingDive}
-                  className="relative z-10 ml-auto min-h-10 shrink-0 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.1em] text-[#8B7355] active:bg-[#F5EFE0] disabled:opacity-40"
-                >
-                  Close
-                </button>
-              </div>
 
-              {loadingDive && (
-                <p className="font-serif text-sm italic text-[#8B7355]">Opening the page on this word…</p>
-              )}
+                {loadingDive && (
+                  <p className="font-serif text-sm italic text-[#8B7355]">Opening the page on this word…</p>
+                )}
 
-              {selectedFromGrid && !loadingDive && result && (
-                <p className="text-xs text-[#B0A898]">
-                  From your grid: <span className="font-medium text-[#1C1917]">{selectedFromGrid.word}</span>
-                </p>
-              )}
+                {selectedFromGrid && !loadingDive && result && (
+                  <p className="text-xs text-[#B0A898]">
+                    From your grid: <span className="font-medium text-[#1C1917]">{selectedFromGrid.word}</span>
+                  </p>
+                )}
 
-              {result && !loadingDive && (
-                <div className="relative space-y-5">
+                {result && !loadingDive && (
+                  <div className="relative space-y-5">
                   <div className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-6 shadow-sm">
                     <AddWordBurst show={burst} />
                     <div className="flex flex-wrap items-center gap-2">
@@ -338,12 +355,14 @@ function DivePageContent() {
                   <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Etymology</p>
                     <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.origin}</p>
-                    <div className="mt-6 border-t border-[#F5F0EA] pt-6">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
-                        Where you might have met it
-                      </p>
-                      <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.used_by}</p>
-                    </div>
+                    {result.used_by && (
+                      <div className="mt-6 border-t border-[#F5F0EA] pt-6">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+                          Where you might have met it
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.used_by}</p>
+                      </div>
+                    )}
                   </div>
 
                   {(result.related_words ?? []).length > 0 && (
@@ -363,6 +382,12 @@ function DivePageContent() {
                     </div>
                   )}
 
+                  {extrasPending && (
+                    <p className="text-center text-xs italic text-[#B0A898]">
+                      Still gathering kindred words and where it&apos;s been used…
+                    </p>
+                  )}
+
                   <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
                     <RatingDial value={rating} onChange={setRating} label="How much do you want to keep it?" />
                     <button
@@ -378,7 +403,8 @@ function DivePageContent() {
                   </div>
                 </div>
               )}
-            </motion.section>
+              </motion.section>
+            </div>
           </>
         )}
       </AnimatePresence>

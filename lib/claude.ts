@@ -211,11 +211,16 @@ function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set
 /**
  * Exactly 10 metaphors for the grid — same rhythm as Deep Dive’s 25-word grid, fewer cells.
  * Uses two parallel API requests (5 + 5) so latency tracks the slower call.
+ *
+ * `onBatch`, if given, fires as soon as each parallel completion lands (and again for the
+ * fallback fill, if needed) so the UI can paint results as they arrive instead of waiting
+ * for the whole grid.
  */
 export async function generateMetaphorGrid(
   lexicon: Record<string, LexiconWord>,
   explorationThreads: string[] = [],
-  excludeMetaphors: string[] = []
+  excludeMetaphors: string[] = [],
+  onBatch?: (items: MetaphorGridItem[]) => void
 ): Promise<MetaphorGridResponse> {
   const keys = Object.keys(lexicon).slice(0, 40);
   const known = keys.length
@@ -241,9 +246,27 @@ Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’
 
 Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (another completion supplied batch A). Fresh, specific; clichés only if subverted.`;
 
+  const dispatched = new Set<string>();
+  function emit(items: MetaphorGridItem[]) {
+    if (!onBatch) return;
+    const fresh = items.filter((s) => {
+      const k = s.metaphor?.toLowerCase().trim();
+      if (!k || excludeSet.has(k) || dispatched.has(k)) return false;
+      dispatched.add(k);
+      return true;
+    });
+    if (fresh.length) onBatch(fresh);
+  }
+
   const [rawA, rawB] = await Promise.all([
-    chatJson<MetaphorGridResponse>(system5a, user5a, 2048, 0.72),
-    chatJson<MetaphorGridResponse>(system5b, user5b, 2048, 0.72),
+    chatJson<MetaphorGridResponse>(system5a, user5a, 2048, 0.72).then((r) => {
+      emit(Array.isArray(r.suggestions) ? r.suggestions : []);
+      return r;
+    }),
+    chatJson<MetaphorGridResponse>(system5b, user5b, 2048, 0.72).then((r) => {
+      emit(Array.isArray(r.suggestions) ? r.suggestions : []);
+      return r;
+    }),
   ]);
 
   const suggestions = mergeMetaphorSuggestions(
@@ -261,6 +284,7 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
       2048,
       0.68
     );
+    emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
     for (const s of fill.suggestions ?? []) {
       if (suggestions.length >= 10) break;
       const k = s.metaphor?.toLowerCase().trim();
@@ -322,16 +346,25 @@ function mergeTasteSuggestions(
   return out;
 }
 
+const TASTE_GRID_BATCH_SIZES = [5, 5, 5, 5, 5] as const;
+const TASTE_GRID_BATCH_LABELS = ["A", "B", "C", "D", "E"] as const;
+
 /**
  * Exactly 25 words tailored to current ratings. Excludes words already in the lexicon.
  * Call again after each rating so the grid reflects refined taste.
  *
- * Uses two parallel API requests (13 + 12 words) so wall-clock time tracks the slower call instead of one huge completion.
+ * Uses five parallel API requests (5 words each) instead of one huge completion — wall-clock
+ * time tracks the slowest 5-word batch instead of a 25-word (or even 13-word) completion.
+ *
+ * `onBatch`, if given, fires as soon as each of those five completions lands (and again for the
+ * fallback fill, if needed) so the UI can paint words as they arrive instead of waiting for the
+ * whole grid.
  */
 export async function generateTasteGrid(
   lexicon: Record<string, LexiconWord>,
   context?: { lastRatedWord?: string; lastRating?: number },
-  explorationThreads: string[] = []
+  explorationThreads: string[] = [],
+  onBatch?: (words: TasteGridWord[]) => void
 ): Promise<TasteGridResponse> {
   const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
   const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
@@ -349,24 +382,36 @@ Their lexicon with ratings (higher = more love):
 ${lexiconTastePayload(lexicon)}
 ${threadBlock}`;
 
-  const system13 = tasteGridSystem(13);
-  const system12 = tasteGridSystem(12);
+  const dispatched = new Set<string>();
+  function emit(words: TasteGridWord[]) {
+    if (!onBatch) return;
+    const fresh = words.filter((s) => {
+      const k = s.word?.toLowerCase().trim();
+      if (!k || exclude.has(k) || dispatched.has(k)) return false;
+      dispatched.add(k);
+      return true;
+    });
+    if (fresh.length) onBatch(fresh);
+  }
 
-  const user13 = `${baseUser}
+  const batches = await Promise.all(
+    TASTE_GRID_BATCH_SIZES.map((size, i) =>
+      chatJson<{ suggestions: TasteGridWord[] }>(
+        tasteGridSystem(size),
+        `${baseUser}
 
-Return ONLY batch A: exactly 13 NEW words — half of a 25-word taste grid (another completion supplies the other half).`;
-
-  const user12 = `${baseUser}
-
-Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (another completion supplied batch A).`;
-
-  const [rawA, rawB] = await Promise.all([
-    chatJson<{ suggestions: TasteGridWord[] }>(system13, user13, 2560, 0.75),
-    chatJson<{ suggestions: TasteGridWord[] }>(system12, user12, 2560, 0.75),
-  ]);
+Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — one fifth of a 25-word taste grid (four other completions supply the rest, in parallel). Bias toward a distinct semantic corner so batches rarely overlap.`,
+        640,
+        0.75
+      ).then((r) => {
+        emit(Array.isArray(r.suggestions) ? r.suggestions : []);
+        return r;
+      })
+    )
+  );
 
   const filtered = mergeTasteSuggestions(
-    [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
+    batches.map((b) => (Array.isArray(b.suggestions) ? b.suggestions : [])),
     exclude
   );
 
@@ -380,6 +425,7 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
       2560,
       0.7
     );
+    emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
     for (const s of fill.suggestions ?? []) {
       if (filtered.length >= 25) break;
       const k = s.word?.toLowerCase().trim();
@@ -416,17 +462,23 @@ related_words length 3.
 related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].
 ${JSON_ONLY}`;
 
-/** Two parallel completions (core facts + related/etymology extras) so wall-clock latency tracks the slower half, not the sum. */
-export async function deepDiveWord(word: string): Promise<DeepDiveResult> {
+type DeepDiveCore = Omit<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">;
+
+/**
+ * Two parallel completions (core facts + related/etymology extras) so wall-clock latency tracks
+ * the slower half, not the sum. `onCore`, if given, fires as soon as the core half lands — the
+ * word, pronunciation, definition, nuance, examples, and origin — so the UI can show the word
+ * immediately instead of waiting on the (slower-to-matter) related-words/etymology extras too.
+ */
+export async function deepDiveWord(word: string, onCore?: (core: DeepDiveCore) => void): Promise<DeepDiveResult> {
   const trimmed = word.trim();
   const user = `Full story of the word: "${trimmed}"`;
 
   const [core, extras] = await Promise.all([
-    chatJson<Omit<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
-      DEEP_DIVE_CORE_SYSTEM,
-      user,
-      1536
-    ),
+    chatJson<DeepDiveCore>(DEEP_DIVE_CORE_SYSTEM, user, 1536).then((c) => {
+      onCore?.(c);
+      return c;
+    }),
     chatJson<Pick<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
       DEEP_DIVE_EXTRAS_SYSTEM,
       user,
