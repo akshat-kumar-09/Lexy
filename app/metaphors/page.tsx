@@ -36,7 +36,7 @@ export default function MetaphorsPage() {
 
   useEffect(() => {
     const existing = useLexicon.getState().metaphor_history.find((h) => h.date === today);
-    if (gridNonce === 0 && existing && existing.suggestions.length >= 10) {
+    if (gridNonce === 0 && existing && existing.suggestions.length >= 12) {
       return;
     }
 
@@ -125,7 +125,7 @@ export default function MetaphorsPage() {
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Metaphors</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
-          Ten images at a time — like Deep Dive&apos;s grid, but metaphor. Tap one to open it fully, rate it, save it.
+          Twelve images at a time — like Deep Dive&apos;s grid, but metaphor. Tap one to open it fully, rate it, save it.
           <span className="font-semibold not-italic text-[#6A6360]"> {FAVOURITE_THRESHOLD}+</span> lands in favourites.
         </p>
       </div>
@@ -140,7 +140,7 @@ export default function MetaphorsPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Today&apos;s images</h2>
-            <p className="mt-1 text-xs text-[#8B7355]">Ten fresh metaphors — new batch replaces today&apos;s set.</p>
+            <p className="mt-1 text-xs text-[#8B7355]">Twelve fresh metaphors — new batch replaces today&apos;s set.</p>
           </div>
           <button
             type="button"
@@ -154,7 +154,7 @@ export default function MetaphorsPage() {
 
         {loading && list.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
-            Gathering ten metaphors that fit you…
+            Gathering twelve metaphors that fit you…
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">

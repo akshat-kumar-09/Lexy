@@ -173,24 +173,31 @@ export async function analyseScribble(text: string): Promise<ScribbleAnalysis> {
 }
 
 function metaphorGridSystem(itemCount: number): string {
-  return `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
+  return `You are Lexy — a working poet's ear for image, not a corporate copywriter. Return ONLY valid JSON:
 {
   "suggestions": [
     {
-      "metaphor": "vivid figurative phrase someone could adopt — not a single dictionary lemma",
-      "unpacking": "plain language: what the image means",
-      "image_strength": "one sentence: why this image lands",
+      "metaphor": "a genuinely striking figurative phrase, 3-8 words, built from ONE concrete, specific, sensory image — the kind a real writer would reach for, not a stock phrase",
+      "unpacking": "plain language: what the image means, and why THIS specific image (not a generic one) captures it",
+      "image_strength": "one sentence naming the precise sensory or physical detail that makes it land — not an abstract restatement",
       "example_sentences": ["three natural sentences using or alluding to this metaphor"],
       "why_for_you": "one short line: why this fits their taste and their exploration themes"
     }
   ]
 }
+
+The bar: each metaphor should make someone stop and feel something — recognition, a small ache, a laugh, a chill — not nod along politely. If it would sit comfortably on a motivational poster or in a corporate deck, it has failed.
+
+Hard ban — never produce these, or close cousins of them in any phrasing: a rollercoaster of emotions, a puzzle piece (missing or falling into place), a double-edged sword, a blank canvas, a ship/boat navigating storms, a garden that needs tending or watering, a tapestry of anything, a symphony of anything, walls closing in, a house of cards, riding the waves, an anchor in a storm, a book with unwritten pages, a butterfly emerging or breaking free, a phoenix rising from ashes, a mirror reflecting something, a maze or labyrinth, a dance between two things, threads weaving together, a compass guiding you, planting seeds, building bridges, a marathon not a sprint.
+
+Instead, reach for ONE concrete, specific, physical image per metaphor, drawn from a real domain: a particular craft or trade, a specific animal's behaviour, weather at a precise moment, food and its exact texture or taste, an object worn down by a very specific use, a bodily sensation, one very particular everyday scene. Ground it in something you could photograph or touch — never an abstract concept wearing a costume.
+
 Rules:
 - suggestions must contain EXACTLY ${itemCount} items.
 - Each item needs all fields. example_sentences must have exactly 3 strings.
-- Metaphors must be distinct — no near-duplicates.
-- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).
-- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).
+- Metaphors must be distinct from each other and drawn from different domains — no two from the same well (not two kitchen images, not two weather images).
+- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive), and do not just reskin one of them with a synonym.
+- Another completion fills the rest of this grid in parallel — steer toward a noticeably different domain and register so batches rarely collide (overlap discarded).
 ${JSON_ONLY}`;
 }
 
@@ -208,9 +215,20 @@ function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set
   return out;
 }
 
+const METAPHOR_GRID_BATCH_SIZES = [3, 3, 3, 3] as const;
+const METAPHOR_GRID_BATCH_LABELS = ["A", "B", "C", "D"] as const;
+/** Assigning each parallel call its own concrete domain does more for variety than hoping the model self-diversifies. */
+const METAPHOR_GRID_BATCH_DOMAINS = [
+  "weather, animals, or the outdoors at one precise moment",
+  "an ordinary object — what a hand actually holds, wears down, or repairs",
+  "food, cooking, or a specific craft/trade — the exact texture or technique of making something",
+  "the body — one precise physical sensation or spatial feeling",
+] as const;
+
 /**
- * Exactly 10 metaphors for the grid — same rhythm as Deep Dive’s 25-word grid, fewer cells.
- * Uses two parallel API requests (5 + 5) so latency tracks the slower call.
+ * Exactly 12 metaphors for the grid — same rhythm as Deep Dive's 25-word grid, fewer cells.
+ * Uses four parallel API requests (3 each), each pinned to a different concrete domain, so
+ * latency tracks the slowest call and the set doesn't collapse into one register.
  *
  * `onBatch`, if given, fires as soon as each parallel completion lands (and again for the
  * fallback fill, if needed) so the UI can paint results as they arrive instead of waiting
@@ -235,17 +253,6 @@ export async function generateMetaphorGrid(
 ${threadBlock}
 Already shown or saved today (do NOT repeat these images): ${excludeList}`;
 
-  const system5a = metaphorGridSystem(5);
-  const system5b = metaphorGridSystem(5);
-
-  const user5a = `${baseUser}
-
-Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’s grid (another completion supplies batch B). Fresh, specific; clichés only if subverted.`;
-
-  const user5b = `${baseUser}
-
-Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (another completion supplied batch A). Fresh, specific; clichés only if subverted.`;
-
   const dispatched = new Set<string>();
   function emit(items: MetaphorGridItem[]) {
     if (!onBatch) return;
@@ -258,35 +265,40 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
     if (fresh.length) onBatch(fresh);
   }
 
-  const [rawA, rawB] = await Promise.all([
-    chatJson<MetaphorGridResponse>(system5a, user5a, 2048, 0.72).then((r) => {
-      emit(Array.isArray(r.suggestions) ? r.suggestions : []);
-      return r;
-    }),
-    chatJson<MetaphorGridResponse>(system5b, user5b, 2048, 0.72).then((r) => {
-      emit(Array.isArray(r.suggestions) ? r.suggestions : []);
-      return r;
-    }),
-  ]);
+  const batches = await Promise.all(
+    METAPHOR_GRID_BATCH_SIZES.map((size, i) =>
+      chatJson<MetaphorGridResponse>(
+        metaphorGridSystem(size),
+        `${baseUser}
+
+Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphors — one quarter of today's grid (three other completions supply the rest, in parallel). Draw specifically from this domain: ${METAPHOR_GRID_BATCH_DOMAINS[i]}. Fresh, specific, felt — never stock phrasing.`,
+        1536,
+        0.85
+      ).then((r) => {
+        emit(Array.isArray(r.suggestions) ? r.suggestions : []);
+        return r;
+      })
+    )
+  );
 
   const suggestions = mergeMetaphorSuggestions(
-    [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
+    batches.map((b) => (Array.isArray(b.suggestions) ? b.suggestions : [])),
     excludeSet
   );
 
-  const baseSystem10 = metaphorGridSystem(10);
+  const baseSystem12 = metaphorGridSystem(12);
 
-  if (suggestions.length < 10) {
-    const need = 10 - suggestions.length;
+  if (suggestions.length < 12) {
+    const need = 12 - suggestions.length;
     const fill = await chatJson<MetaphorGridResponse>(
-      `${baseSystem10}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
+      `${baseSystem12}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
       `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
       2048,
-      0.68
+      0.8
     );
     emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
     for (const s of fill.suggestions ?? []) {
-      if (suggestions.length >= 10) break;
+      if (suggestions.length >= 12) break;
       const k = s.metaphor?.toLowerCase().trim();
       if (k && !excludeSet.has(k) && !suggestions.some((x) => x.metaphor.toLowerCase() === k)) {
         suggestions.push(s);
@@ -294,7 +306,7 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
     }
   }
 
-  return { suggestions: suggestions.slice(0, 10) };
+  return { suggestions: suggestions.slice(0, 12) };
 }
 
 function lexiconTastePayload(lexicon: Record<string, LexiconWord>): string {
