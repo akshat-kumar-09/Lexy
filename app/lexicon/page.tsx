@@ -236,7 +236,14 @@ function WordRow({ w, onRemove }: { w: LexiconWord; onRemove: () => void }) {
             Open full page →
           </p>
         </div>
-        <p className="mt-3 flex-1 text-sm leading-relaxed text-[#6A6360] md:mt-0">{w.definition}</p>
+        <div className="mt-3 flex-1 md:mt-0">
+          <p className="text-sm leading-relaxed text-[#6A6360]">{w.definition}</p>
+          {w.user_sentence && (
+            <p className="mt-2 border-l-2 border-[#EDE8E0] pl-3 font-serif text-sm italic leading-relaxed text-[#8B7355]">
+              &ldquo;{w.user_sentence}&rdquo;
+            </p>
+          )}
+        </div>
       </Link>
       <div className="flex shrink-0 flex-row items-center gap-3 md:flex-col md:items-end">
         <span

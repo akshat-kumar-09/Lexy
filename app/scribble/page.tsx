@@ -4,6 +4,7 @@ import { AddWordBurst } from "@/components/AddWordBurst";
 import { IPA } from "@/components/IPA";
 import { RatingDial } from "@/components/RatingDial";
 import { ScribbleLexiconSidebar } from "@/components/ScribbleLexiconSidebar";
+import { SentenceCapture } from "@/components/SentenceCapture";
 import { analyseScribble, readHandwriting } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
@@ -46,6 +47,7 @@ export default function ScribblePage() {
   const [result, setResult] = useState<ScribbleAnalysis | null>(null);
   const [burst, setBurst] = useState<string | null>(null);
   const [ratings, setRatings] = useState<Record<string, number>>({});
+  const [sentences, setSentences] = useState<Record<string, string>>({});
   const [openRewriteId, setOpenRewriteId] = useState<string | null>(null);
 
   const recentRewrites = useMemo(() => scribble_rewrites.slice(0, 12), [scribble_rewrites]);
@@ -121,6 +123,8 @@ export default function ScribblePage() {
 
   function addCandidate(c: VocabularyCandidate) {
     const key = c.word.toLowerCase();
+    const sentence = (sentences[key] ?? "").trim();
+    if (!sentence) return;
     const r = ratings[key] ?? 7;
     upsertWord({
       word: c.word,
@@ -132,6 +136,7 @@ export default function ScribblePage() {
       rating: r,
       added: todayISODate(),
       source: "scribble",
+      user_sentence: sentence,
     });
     playLexiconChime();
     setBurst(c.word);
@@ -370,6 +375,14 @@ export default function ScribblePage() {
                       </p>
                       <p className="mt-3 text-xs leading-relaxed text-[#6A6360]">{c.origin}</p>
                       <p className="mt-3 text-sm italic leading-relaxed text-[#8B7355]">{c.why_relevant}</p>
+                      <div className="mt-5 border-t border-[#F5F0EA] pt-5">
+                        <SentenceCapture
+                          word={c.word}
+                          value={sentences[key] ?? ""}
+                          onChange={(v) => setSentences((s) => ({ ...s, [key]: v }))}
+                          id={`sentence-${key}`}
+                        />
+                      </div>
                       <div className="mt-5">
                         <RatingDial
                           label="Rating"
@@ -381,7 +394,8 @@ export default function ScribblePage() {
                       <button
                         type="button"
                         onClick={() => addCandidate(c)}
-                        className="mt-4 w-full rounded-full bg-[#1C1917] py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920]"
+                        disabled={!(sentences[key] ?? "").trim()}
+                        className="mt-4 w-full rounded-full bg-[#1C1917] py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920] disabled:opacity-40"
                       >
                         Add to my lexicon
                       </button>

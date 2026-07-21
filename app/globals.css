@@ -200,3 +200,27 @@ button {
     animation: none;
   }
 }
+
+/* ── Skeleton shimmer: a page mid-arrival, not a dead box ──── */
+@keyframes lexy-shimmer-sweep {
+  0% {
+    background-position: -320px 0;
+  }
+  100% {
+    background-position: 320px 0;
+  }
+}
+
+.lexy-shimmer {
+  background-image: linear-gradient(90deg, #f0ebe0 25%, #faf6ee 37%, #f0ebe0 63%);
+  background-size: 320px 100%;
+  animation: lexy-shimmer-sweep 1.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lexy-shimmer {
+    animation: none;
+    background-image: none;
+    background-color: #f0ebe0;
+  }
+}

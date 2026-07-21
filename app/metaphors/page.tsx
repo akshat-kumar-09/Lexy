@@ -2,7 +2,9 @@
 
 import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
+import { QuickRate } from "@/components/QuickRate";
 import { RatingDial } from "@/components/RatingDial";
+import { SentenceCapture } from "@/components/SentenceCapture";
 import { generateMetaphorGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
 import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
@@ -29,6 +31,7 @@ export default function MetaphorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MetaphorGridItem | null>(null);
   const [rating, setRating] = useState(8);
+  const [userSentence, setUserSentence] = useState("");
   const [burst, setBurst] = useState(false);
 
   useEffect(() => {
@@ -78,10 +81,14 @@ export default function MetaphorsPage() {
 
   function openDetail(m: MetaphorGridItem) {
     setSelected(m);
-    setRating(8);
+    const saved = useLexicon.getState().words[m.metaphor.toLowerCase()];
+    setRating(saved?.rating ?? 8);
+    setUserSentence(saved?.user_sentence ?? "");
   }
 
-  function addToLexicon(m: MetaphorGridItem) {
+  function addToLexicon(m: MetaphorGridItem, overrideRating?: number) {
+    const sentence = userSentence.trim();
+    if (!sentence) return;
     const def = [m.unpacking, m.image_strength].filter(Boolean).join("\n\n");
     const examples = m.example_sentences ?? [];
     upsertWord({
@@ -91,20 +98,23 @@ export default function MetaphorsPage() {
       definition: def || m.unpacking,
       example: examples[0] ?? "",
       origin: m.image_strength ?? "—",
-      rating,
+      rating: overrideRating ?? rating,
       added: today,
       source: "metaphor",
+      user_sentence: sentence,
     });
     playLexiconChime();
     setBurst(true);
     setTimeout(() => setBurst(false), 700);
     setSelected(null);
+    setUserSentence("");
   }
 
   const list = todays?.suggestions ?? [];
 
   function closeMetaphorDetail() {
     setSelected(null);
+    setUserSentence("");
   }
 
   const metaphorDetailOpen = Boolean(selected);
@@ -236,22 +246,32 @@ export default function MetaphorsPage() {
               )}
             </div>
 
-            <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-              <RatingDial value={rating} onChange={setRating} label="How does it land?" />
-              <button
-                type="button"
-                onClick={() => addToLexicon(selected)}
-                className="mt-5 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0]"
-              >
-                Add to my lexicon
-              </button>
-              <p className="mt-3 text-center text-[11px] text-[#B0A898]">
+            <div className="space-y-5 rounded-2xl border border-[#EDE8E0] bg-white p-6">
+              <SentenceCapture word={selected.metaphor} value={userSentence} onChange={setUserSentence} />
+              <div className="border-t border-[#F5F0EA] pt-5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Quick rate</p>
+                <div className="mt-2">
+                  <QuickRate onPick={(v) => addToLexicon(selected, v)} disabled={!userSentence.trim()} />
+                </div>
+              </div>
+              <div className="border-t border-[#F5F0EA] pt-5">
+                <RatingDial value={rating} onChange={setRating} label="Or fine-tune, then add" />
+                <button
+                  type="button"
+                  onClick={() => addToLexicon(selected)}
+                  disabled={!userSentence.trim()}
+                  className="mt-4 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0] disabled:opacity-40"
+                >
+                  Add to my lexicon
+                </button>
+              </div>
+              <p className="text-center text-[11px] text-[#B0A898]">
                 {FAVOURITE_THRESHOLD}+ shows as a favourite on My Lexy.
               </p>
               <button
                 type="button"
                 onClick={closeMetaphorDetail}
-                className="mt-4 w-full rounded-full border border-[#EDE8E0] py-2.5 text-sm text-[#6A6360] hover:border-[#8B7355]/40 md:mt-4"
+                className="w-full rounded-full border border-[#EDE8E0] py-2.5 text-sm text-[#6A6360] hover:border-[#8B7355]/40"
               >
                 Back to grid
               </button>

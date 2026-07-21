@@ -10,6 +10,8 @@ export interface LexiconWord {
   rating: number;
   added: string;
   source: WordSource;
+  /** The user's own sentence using this word — written at add-time, kept with the word for good. */
+  user_sentence?: string;
 }
 
 /** One cell in the daily metaphor grid (10 at a time). */
@@ -85,6 +87,8 @@ export interface DeepDiveResult {
   definition: string;
   nuance: string;
   example_sentences: string[];
+  /** Casual, ready-to-say one-liners for actual conversation — not literary/written examples. */
+  conversation_phrases: string[];
   origin: string;
   related_words: string[];
   used_by: string;

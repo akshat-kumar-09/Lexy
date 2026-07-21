@@ -4,7 +4,9 @@ import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
+import { QuickRate } from "@/components/QuickRate";
 import { RatingDial } from "@/components/RatingDial";
+import { SentenceCapture } from "@/components/SentenceCapture";
 import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
 import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
@@ -35,6 +37,8 @@ function DivePageContent() {
 
   const [selectedFromGrid, setSelectedFromGrid] = useState<TasteGridWord | null>(null);
   const [query, setQuery] = useState("");
+  const [pendingWord, setPendingWord] = useState("");
+  const [userSentence, setUserSentence] = useState("");
   const [loadingDive, setLoadingDive] = useState(false);
   const [extrasPending, setExtrasPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,13 +49,21 @@ function DivePageContent() {
   const loadGrid = useCallback(async () => {
     setGridLoading(true);
     setGridError(null);
-    setSuggestions([]);
     try {
       const words = useLexicon.getState().words;
       const ctx = lastRatedRef.current ?? undefined;
       lastRatedRef.current = null;
+      // Keep the current grid on screen until the first fresh batch actually lands, then
+      // swap it in — no blank "curating…" flash every time a word gets rated and added.
+      let firstBatch = true;
       const g = await generateTasteGrid(words, ctx, explorationThreads, (batch) => {
-        setSuggestions((prev) => [...prev, ...batch]);
+        setSuggestions((prev) => {
+          if (firstBatch) {
+            firstBatch = false;
+            return batch;
+          }
+          return [...prev, ...batch];
+        });
       });
       setSuggestions(g.suggestions);
     } catch (e) {
@@ -74,8 +86,12 @@ function DivePageContent() {
     setLoadingDive(true);
     setExtrasPending(false);
     setResult(null);
+    setPendingWord(trimmed);
     if (hint) setSelectedFromGrid(hint);
     else setSelectedFromGrid(null);
+    const saved = useLexicon.getState().words[trimmed.toLowerCase()];
+    setRating(saved?.rating ?? 7.5);
+    setUserSentence(saved?.user_sentence ?? "");
     try {
       const r = await deepDiveWord(trimmed, (core) => {
         // Core facts land first — show the word immediately instead of waiting on
@@ -85,8 +101,6 @@ function DivePageContent() {
         setExtrasPending(true);
       });
       setResult(r);
-      const saved = useLexicon.getState().words[trimmed.toLowerCase()];
-      setRating(saved?.rating ?? 7.5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not dive into that word");
     } finally {
@@ -122,8 +136,11 @@ function DivePageContent() {
     await openDive(q);
   }
 
-  function addToLexicon() {
+  function addToLexicon(overrideRating?: number) {
     if (!result) return;
+    const sentence = userSentence.trim();
+    if (!sentence) return;
+    const finalRating = overrideRating ?? rating;
     const ex = result.example_sentences?.[0] ?? "";
     upsertWord({
       word: result.word,
@@ -132,17 +149,19 @@ function DivePageContent() {
       definition: result.definition,
       example: ex,
       origin: result.origin,
-      rating,
+      rating: finalRating,
       added: todayISODate(),
       source: "deep_dive",
+      user_sentence: sentence,
     });
-    lastRatedRef.current = { lastRatedWord: result.word, lastRating: rating };
+    lastRatedRef.current = { lastRatedWord: result.word, lastRating: finalRating };
     playLexiconChime();
     setBurst(true);
     setTimeout(() => setBurst(false), 700);
     setResult(null);
     setQuery("");
     setSelectedFromGrid(null);
+    setUserSentence("");
     openedUrlLemmaRef.current = null;
     if (pathname === "/dive" && searchParams.get("word")) {
       router.replace("/dive", { scroll: false });
@@ -290,7 +309,21 @@ function DivePageContent() {
                 </div>
 
                 {loadingDive && (
-                  <p className="font-serif text-sm italic text-[#8B7355]">Opening the page on this word…</p>
+                  <div className="space-y-5">
+                    <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6 shadow-sm">
+                      <div className="h-7 w-2/5 rounded-full lexy-shimmer" />
+                      <div className="mt-3 h-4 w-1/4 rounded-full lexy-shimmer" />
+                      <div className="mt-3 h-3 w-16 rounded-full lexy-shimmer" />
+                      <div className="mt-5 space-y-2">
+                        <div className="h-3 w-full rounded-full lexy-shimmer" />
+                        <div className="h-3 w-5/6 rounded-full lexy-shimmer" />
+                        <div className="h-3 w-3/5 rounded-full lexy-shimmer" />
+                      </div>
+                    </div>
+                    <p className="text-center font-serif text-sm italic text-[#8B7355]">
+                      Opening the page on <span className="font-semibold not-italic text-[#4A4340]">{pendingWord}</span>…
+                    </p>
+                  </div>
                 )}
 
                 {selectedFromGrid && !loadingDive && result && (
@@ -352,6 +385,20 @@ function DivePageContent() {
                     </div>
                   </div>
 
+                  {(result.conversation_phrases ?? []).length > 0 && (
+                    <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Say it today</p>
+                      <p className="mt-1 text-xs text-[#8B7355]">Ready-to-use lines — drop one into a real conversation.</p>
+                      <div className="mt-4 space-y-2.5">
+                        {result.conversation_phrases.map((p, i) => (
+                          <p key={i} className="rounded-xl bg-[#F5EFE0] px-4 py-3 text-sm leading-relaxed text-[#4A4340]">
+                            {p}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Etymology</p>
                     <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.origin}</p>
@@ -388,16 +435,26 @@ function DivePageContent() {
                     </p>
                   )}
 
-                  <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-                    <RatingDial value={rating} onChange={setRating} label="How much do you want to keep it?" />
-                    <button
-                      type="button"
-                      onClick={addToLexicon}
-                      className="mt-5 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0]"
-                    >
-                      {alreadySaved ? "Update rating in lexicon" : "Rate & add to lexicon"}
-                    </button>
-                    <p className="mt-3 text-center text-[11px] italic text-[#B0A898]">
+                  <div className="space-y-5 rounded-2xl border border-[#EDE8E0] bg-white p-6">
+                    <SentenceCapture word={result.word} value={userSentence} onChange={setUserSentence} />
+                    <div className="border-t border-[#F5F0EA] pt-5">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Quick rate</p>
+                      <div className="mt-2">
+                        <QuickRate onPick={(v) => addToLexicon(v)} disabled={!userSentence.trim()} />
+                      </div>
+                    </div>
+                    <div className="border-t border-[#F5F0EA] pt-5">
+                      <RatingDial value={rating} onChange={setRating} label="Or fine-tune, then add" />
+                      <button
+                        type="button"
+                        onClick={() => addToLexicon()}
+                        disabled={!userSentence.trim()}
+                        className="mt-4 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0] disabled:opacity-40"
+                      >
+                        {alreadySaved ? "Update rating in lexicon" : "Rate & add to lexicon"}
+                      </button>
+                    </div>
+                    <p className="text-center text-[11px] italic text-[#B0A898]">
                       Adding refreshes your 25-word grid so Lexy can learn your taste.
                     </p>
                   </div>

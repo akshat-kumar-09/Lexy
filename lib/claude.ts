@@ -444,9 +444,10 @@ const DEEP_DIVE_CORE_SYSTEM = `You are Lexy. Return ONLY valid JSON:
   "definition": "precise definition",
   "nuance": "what this word captures that near-synonyms do not",
   "example_sentences": ["three sentences"],
+  "conversation_phrases": ["two or three short, natural one-liners a real person could actually say out loud today — texting a friend, small talk, venting about work, a quick aside — using this word in casual spoken register, not literary or written-page style"],
   "origin": "etymology"
 }
-All fields required. example_sentences length 3. Pronunciation mandatory.
+All fields required. example_sentences length 3. conversation_phrases length 2 or 3, genuinely sayable out loud (contractions, casual tone are good). Pronunciation mandatory.
 ${JSON_ONLY}`;
 
 const DEEP_DIVE_EXTRAS_SYSTEM = `You are Lexy. Return ONLY valid JSON:
