@@ -14,13 +14,15 @@ export interface LexiconWord {
   user_sentence?: string;
 }
 
-/** One cell in the daily metaphor grid (10 at a time). */
+/** One cell in the daily metaphor grid (12 at a time). */
 export interface MetaphorGridItem {
   metaphor: string;
   unpacking: string;
   image_strength: string;
   example_sentences: string[];
   why_for_you: string;
+  /** Which exploration theme this best fits — only populated when more than 2 threads are active. */
+  theme?: string;
 }
 
 export interface MetaphorDayEntry {
@@ -103,6 +105,8 @@ export interface TasteGridWord {
   part_of_speech: string;
   definition: string;
   why_for_you: string;
+  /** Which exploration theme this best fits — only populated when more than 2 threads are active. */
+  theme?: string;
 }
 
 export interface TasteGridResponse {

@@ -2,7 +2,7 @@
 
 import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
-import { QuickRate } from "@/components/QuickRate";
+import { QuickAddRating } from "@/components/QuickAddRating";
 import { RatingDial } from "@/components/RatingDial";
 import { SentenceCapture } from "@/components/SentenceCapture";
 import { generateMetaphorGrid } from "@/lib/claude";
@@ -86,7 +86,7 @@ export default function MetaphorsPage() {
     setUserSentence(saved?.user_sentence ?? "");
   }
 
-  function addToLexicon(m: MetaphorGridItem, overrideRating?: number) {
+  function addToLexicon(m: MetaphorGridItem) {
     const sentence = userSentence.trim();
     if (!sentence) return;
     const def = [m.unpacking, m.image_strength].filter(Boolean).join("\n\n");
@@ -98,7 +98,7 @@ export default function MetaphorsPage() {
       definition: def || m.unpacking,
       example: examples[0] ?? "",
       origin: m.image_strength ?? "—",
-      rating: overrideRating ?? rating,
+      rating,
       added: today,
       source: "metaphor",
       user_sentence: sentence,
@@ -108,6 +108,25 @@ export default function MetaphorsPage() {
     setTimeout(() => setBurst(false), 700);
     setSelected(null);
     setUserSentence("");
+  }
+
+  /** Rate straight from the grid card — no detail page, no sentence required. */
+  function quickAddMetaphor(m: MetaphorGridItem, ratingValue: number) {
+    const def = [m.unpacking, m.image_strength].filter(Boolean).join("\n\n");
+    upsertWord({
+      word: m.metaphor,
+      pronunciation: "—",
+      part_of_speech: "metaphor",
+      definition: def || m.unpacking,
+      example: "",
+      origin: "",
+      rating: ratingValue,
+      added: today,
+      source: "metaphor",
+    });
+    playLexiconChime();
+    setBurst(true);
+    setTimeout(() => setBurst(false), 700);
   }
 
   const list = todays?.suggestions ?? [];
@@ -159,22 +178,32 @@ export default function MetaphorsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((m, idx) => (
-              <button
+              <div
                 key={`${m.metaphor}-${idx}`}
-                type="button"
-                onClick={() => openDetail(m)}
-                className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/45 sm:hover:shadow-md"
+                className="rounded-2xl border border-[#EDE8E0] bg-white p-4 shadow-sm transition sm:hover:border-[#8B7355]/45 sm:hover:shadow-md"
               >
-                <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
-                <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#6A6360]">{m.unpacking}</p>
-                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355]">Open →</p>
-              </button>
+                <div className="flex items-start justify-between gap-2">
+                  <button type="button" onClick={() => openDetail(m)} className="min-w-0 flex-1 text-left">
+                    <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
+                  </button>
+                  <QuickAddRating onAdd={(v) => quickAddMetaphor(m, v)} />
+                </div>
+                {m.theme && (
+                  <span className="mt-1.5 inline-block rounded-full bg-[#F5EFE0] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8B7355]">
+                    {m.theme}
+                  </span>
+                )}
+                <button type="button" onClick={() => openDetail(m)} className="mt-2 block w-full text-left">
+                  <p className="line-clamp-3 text-xs leading-relaxed text-[#6A6360]">{m.unpacking}</p>
+                  <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8B7355]">Open →</p>
+                </button>
+              </div>
             ))}
           </div>
         )}
 
         {loading && list.length > 0 && (
-          <p className="text-center text-xs italic text-[#B0A898]">Refreshing your ten…</p>
+          <p className="text-center text-xs italic text-[#B0A898]">Refreshing your twelve…</p>
         )}
       </section>
 
@@ -222,7 +251,14 @@ export default function MetaphorsPage() {
 
             <div className="relative overflow-hidden rounded-[1.35rem] bg-[#1C1917] px-4 py-8 shadow-xl sm:px-6 sm:py-10">
               <AddWordBurst show={burst} />
-              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8B7355]">Chosen image</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8B7355]">Chosen image</p>
+                {selected.theme && (
+                  <span className="rounded-full bg-[#2A2520] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#C8BFB0]">
+                    {selected.theme}
+                  </span>
+                )}
+              </div>
               <h2 className="mt-3 break-words font-serif text-xl font-bold leading-[1.15] text-[#F5EFE0] sm:text-2xl md:text-3xl">
                 {selected.metaphor}
               </h2>
@@ -249,13 +285,7 @@ export default function MetaphorsPage() {
             <div className="space-y-5 rounded-2xl border border-[#EDE8E0] bg-white p-6">
               <SentenceCapture word={selected.metaphor} value={userSentence} onChange={setUserSentence} />
               <div className="border-t border-[#F5F0EA] pt-5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Quick rate</p>
-                <div className="mt-2">
-                  <QuickRate onPick={(v) => addToLexicon(selected, v)} disabled={!userSentence.trim()} />
-                </div>
-              </div>
-              <div className="border-t border-[#F5F0EA] pt-5">
-                <RatingDial value={rating} onChange={setRating} label="Or fine-tune, then add" />
+                <RatingDial value={rating} onChange={setRating} label="Your rating" />
                 <button
                   type="button"
                   onClick={() => addToLexicon(selected)}

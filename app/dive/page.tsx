@@ -4,7 +4,7 @@ import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
-import { QuickRate } from "@/components/QuickRate";
+import { QuickAddRating } from "@/components/QuickAddRating";
 import { RatingDial } from "@/components/RatingDial";
 import { SentenceCapture } from "@/components/SentenceCapture";
 import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
@@ -136,11 +136,10 @@ function DivePageContent() {
     await openDive(q);
   }
 
-  function addToLexicon(overrideRating?: number) {
+  function addToLexicon() {
     if (!result) return;
     const sentence = userSentence.trim();
     if (!sentence) return;
-    const finalRating = overrideRating ?? rating;
     const ex = result.example_sentences?.[0] ?? "";
     upsertWord({
       word: result.word,
@@ -149,12 +148,12 @@ function DivePageContent() {
       definition: result.definition,
       example: ex,
       origin: result.origin,
-      rating: finalRating,
+      rating,
       added: todayISODate(),
       source: "deep_dive",
       user_sentence: sentence,
     });
-    lastRatedRef.current = { lastRatedWord: result.word, lastRating: finalRating };
+    lastRatedRef.current = { lastRatedWord: result.word, lastRating: rating };
     playLexiconChime();
     setBurst(true);
     setTimeout(() => setBurst(false), 700);
@@ -171,6 +170,26 @@ function DivePageContent() {
 
   function refreshGridManual() {
     lastRatedRef.current = null;
+    setGridNonce((n) => n + 1);
+  }
+
+  /** Rate straight from the grid card — no detail page, no etymology lookup, no sentence required. */
+  function quickAddFromGrid(s: TasteGridWord, ratingValue: number) {
+    upsertWord({
+      word: s.word,
+      pronunciation: s.pronunciation,
+      part_of_speech: s.part_of_speech,
+      definition: s.definition,
+      example: "",
+      origin: "",
+      rating: ratingValue,
+      added: todayISODate(),
+      source: "deep_dive",
+    });
+    lastRatedRef.current = { lastRatedWord: s.word, lastRating: ratingValue };
+    playLexiconChime();
+    setBurst(true);
+    setTimeout(() => setBurst(false), 700);
     setGridNonce((n) => n + 1);
   }
 
@@ -242,20 +261,36 @@ function DivePageContent() {
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {suggestions.map((s) => (
-              <button
+              <div
                 key={`${s.word}-${s.pronunciation}`}
-                type="button"
-                onClick={() => void openDive(s.word, s)}
-                className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/50 sm:hover:shadow-md"
+                className="rounded-2xl border border-[#EDE8E0] bg-white p-4 shadow-sm transition sm:hover:border-[#8B7355]/50 sm:hover:shadow-md"
               >
-                <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
-                <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
-                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#B0A898]">
-                  {s.part_of_speech}
-                </p>
-                <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#6A6360]">{s.definition}</p>
-                <p className="mt-3 line-clamp-2 text-[11px] italic leading-snug text-[#8B7355]">{s.why_for_you}</p>
-              </button>
+                <div className="flex items-start justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void openDive(s.word, s)}
+                    className="min-w-0 flex-1 text-left"
+                  >
+                    <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
+                    <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
+                  </button>
+                  <QuickAddRating onAdd={(v) => quickAddFromGrid(s, v)} />
+                </div>
+                <button type="button" onClick={() => void openDive(s.word, s)} className="mt-2 block w-full text-left">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#B0A898]">
+                      {s.part_of_speech}
+                    </p>
+                    {s.theme && (
+                      <span className="rounded-full bg-[#F5EFE0] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8B7355]">
+                        {s.theme}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#6A6360]">{s.definition}</p>
+                  <p className="mt-3 line-clamp-2 text-[11px] italic leading-snug text-[#8B7355]">{s.why_for_you}</p>
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -329,6 +364,7 @@ function DivePageContent() {
                 {selectedFromGrid && !loadingDive && result && (
                   <p className="text-xs text-[#B0A898]">
                     From your grid: <span className="font-medium text-[#1C1917]">{selectedFromGrid.word}</span>
+                    {selectedFromGrid.theme && <span> · theme: {selectedFromGrid.theme}</span>}
                   </p>
                 )}
 
@@ -438,16 +474,10 @@ function DivePageContent() {
                   <div className="space-y-5 rounded-2xl border border-[#EDE8E0] bg-white p-6">
                     <SentenceCapture word={result.word} value={userSentence} onChange={setUserSentence} />
                     <div className="border-t border-[#F5F0EA] pt-5">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Quick rate</p>
-                      <div className="mt-2">
-                        <QuickRate onPick={(v) => addToLexicon(v)} disabled={!userSentence.trim()} />
-                      </div>
-                    </div>
-                    <div className="border-t border-[#F5F0EA] pt-5">
-                      <RatingDial value={rating} onChange={setRating} label="Or fine-tune, then add" />
+                      <RatingDial value={rating} onChange={setRating} label="Your rating" />
                       <button
                         type="button"
-                        onClick={() => addToLexicon()}
+                        onClick={addToLexicon}
                         disabled={!userSentence.trim()}
                         className="mt-4 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0] disabled:opacity-40"
                       >

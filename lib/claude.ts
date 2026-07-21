@@ -1,4 +1,4 @@
-import { threadsContextForPrompt } from "@/lib/threads";
+import { normalizeThreadList, threadsContextForPrompt } from "@/lib/threads";
 import type {
   DeepDiveResult,
   LexiconWord,
@@ -172,7 +172,7 @@ export async function analyseScribble(text: string): Promise<ScribbleAnalysis> {
   return { ...rewrite, ...ideas };
 }
 
-function metaphorGridSystem(itemCount: number): string {
+function metaphorGridSystem(itemCount: number, includeTheme: boolean): string {
   return `You are Lexy — a working poet's ear for image, not a corporate copywriter. Return ONLY valid JSON:
 {
   "suggestions": [
@@ -181,7 +181,12 @@ function metaphorGridSystem(itemCount: number): string {
       "unpacking": "plain language: what the image means, and why THIS specific image (not a generic one) captures it",
       "image_strength": "one sentence naming the precise sensory or physical detail that makes it land — not an abstract restatement",
       "example_sentences": ["three natural sentences using or alluding to this metaphor"],
-      "why_for_you": "one short line: why this fits their taste and their exploration themes"
+      "why_for_you": "one short line: why this fits their taste and their exploration themes"${
+        includeTheme
+          ? `,
+      "theme": "the exact exploration theme label (copied verbatim from the list in the user message) this metaphor best fits"`
+          : ""
+      }
     }
   ]
 }
@@ -197,7 +202,11 @@ Rules:
 - Each item needs all fields. example_sentences must have exactly 3 strings.
 - Metaphors must be distinct from each other and drawn from different domains — no two from the same well (not two kitchen images, not two weather images).
 - Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive), and do not just reskin one of them with a synonym.
-- Another completion fills the rest of this grid in parallel — steer toward a noticeably different domain and register so batches rarely collide (overlap discarded).
+- Another completion fills the rest of this grid in parallel — steer toward a noticeably different domain and register so batches rarely collide (overlap discarded).${
+    includeTheme
+      ? `\n- Every item's "theme" field must be EXACTLY one of the exploration theme labels listed in the user message — copy it verbatim, picking whichever one that metaphor best fits.`
+      : ""
+  }
 ${JSON_ONLY}`;
 }
 
@@ -246,6 +255,7 @@ export async function generateMetaphorGrid(
     : "none yet — infer a thoughtful, image-minded reader";
 
   const threadBlock = threadsContextForPrompt(explorationThreads);
+  const includeTheme = normalizeThreadList(explorationThreads).length > 2;
   const excludeSet = new Set(excludeMetaphors.map((m) => m.toLowerCase().trim()).filter(Boolean));
   const excludeList = [...excludeSet].slice(0, 120).join(", ") || "(none)";
 
@@ -268,7 +278,7 @@ Already shown or saved today (do NOT repeat these images): ${excludeList}`;
   const batches = await Promise.all(
     METAPHOR_GRID_BATCH_SIZES.map((size, i) =>
       chatJson<MetaphorGridResponse>(
-        metaphorGridSystem(size),
+        metaphorGridSystem(size, includeTheme),
         `${baseUser}
 
 Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphors — one quarter of today's grid (three other completions supply the rest, in parallel). Draw specifically from this domain: ${METAPHOR_GRID_BATCH_DOMAINS[i]}. Fresh, specific, felt — never stock phrasing.`,
@@ -286,7 +296,7 @@ Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphor
     excludeSet
   );
 
-  const baseSystem12 = metaphorGridSystem(12);
+  const baseSystem12 = metaphorGridSystem(12, includeTheme);
 
   if (suggestions.length < 12) {
     const need = 12 - suggestions.length;
@@ -316,7 +326,7 @@ function lexiconTastePayload(lexicon: Record<string, LexiconWord>): string {
   return rows.length ? rows.join("\n") : "(empty — infer a literary, curious reader)";
 }
 
-function tasteGridSystem(itemCount: number): string {
+function tasteGridSystem(itemCount: number, includeTheme: boolean): string {
   return `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
 {
   "suggestions": [
@@ -325,7 +335,12 @@ function tasteGridSystem(itemCount: number): string {
       "pronunciation": "IPA with slashes — mandatory on every word",
       "part_of_speech": "noun|verb|adjective|etc",
       "definition": "one concise line (max ~18 words)",
-      "why_for_you": "one short line: why this word fits their emerging taste (not generic)"
+      "why_for_you": "one short line: why this word fits their emerging taste (not generic)"${
+        includeTheme
+          ? `,
+      "theme": "the exact exploration theme label (copied verbatim from the list in the user message) this word best fits"`
+          : ""
+      }
     }
   ]
 }
@@ -336,7 +351,11 @@ Rules:
 - Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
 - Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
-- If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.
+- If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.${
+    includeTheme
+      ? `\n- Every item's "theme" field must be EXACTLY one of the exploration theme labels listed in the user message — copy it verbatim, picking whichever one that word best fits.`
+      : ""
+  }
 - Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).
 ${JSON_ONLY}`;
 }
@@ -382,6 +401,7 @@ export async function generateTasteGrid(
   const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
 
   const threadBlock = threadsContextForPrompt(explorationThreads);
+  const includeTheme = normalizeThreadList(explorationThreads).length > 2;
 
   const last =
     context?.lastRatedWord && context.lastRating != null
@@ -409,7 +429,7 @@ ${threadBlock}`;
   const batches = await Promise.all(
     TASTE_GRID_BATCH_SIZES.map((size, i) =>
       chatJson<{ suggestions: TasteGridWord[] }>(
-        tasteGridSystem(size),
+        tasteGridSystem(size, includeTheme),
         `${baseUser}
 
 Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — one fifth of a 25-word taste grid (four other completions supply the rest, in parallel). Bias toward a distinct semantic corner so batches rarely overlap.`,
@@ -427,7 +447,7 @@ Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — o
     exclude
   );
 
-  const baseSystem25 = tasteGridSystem(25);
+  const baseSystem25 = tasteGridSystem(25, includeTheme);
 
   if (filtered.length < 25) {
     const need = 25 - filtered.length;
