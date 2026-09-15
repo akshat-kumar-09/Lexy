@@ -1,4 +1,5 @@
 import { normalizeThreadList, threadsContextForPrompt } from "@/lib/threads";
+import { clampVocabLevel, levelPromptBlock } from "@/lib/vocabLevels";
 import type {
   DeepDiveResult,
   LexiconWord,
@@ -334,6 +335,7 @@ function tasteGridSystem(itemCount: number, includeTheme: boolean): string {
       "word": "lemma",
       "pronunciation": "IPA with slashes — mandatory on every word",
       "part_of_speech": "noun|verb|adjective|etc",
+      "level": 3,
       "definition": "one concise line (max ~18 words)",
       "why_for_you": "one short line: why this word fits their emerging taste (not generic)"${
         includeTheme
@@ -344,13 +346,16 @@ function tasteGridSystem(itemCount: number, includeTheme: boolean): string {
     }
   ]
 }
+
+${levelPromptBlock()}
+
 Rules:
 - suggestions must contain EXACTLY ${itemCount} items.
-- Every word MUST have IPA pronunciation in slashes.
+- Every word MUST have IPA pronunciation in slashes and an integer level 1–5.
 - Do not include any word the user already has in their lexicon (case-insensitive match on lemma).
 - Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
-- Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
+- Level 3 words should be CONVERSATION-READY: someone could use them in a text or meeting without sounding like they're showing off.
 - If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.${
     includeTheme
       ? `\n- Every item's "theme" field must be EXACTLY one of the exploration theme labels listed in the user message — copy it verbatim, picking whichever one that word best fits.`
@@ -358,6 +363,23 @@ Rules:
   }
 - Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).
 ${JSON_ONLY}`;
+}
+
+function normalizeTasteGridWord(s: TasteGridWord): TasteGridWord {
+  return { ...s, level: clampVocabLevel(s.level) };
+}
+
+/** Drop level-1 words and cap level-2 — the grid is for upgrades, not basics. */
+function filterGridLevels(words: TasteGridWord[]): TasteGridWord[] {
+  let twos = 0;
+  return words.map(normalizeTasteGridWord).filter((w) => {
+    if (w.level === 1) return false;
+    if (w.level === 2) {
+      twos += 1;
+      return twos <= 2;
+    }
+    return true;
+  });
 }
 
 function mergeTasteSuggestions(
@@ -371,7 +393,7 @@ function mergeTasteSuggestions(
       const k = s.word?.toLowerCase().trim();
       if (!k || exclude.has(k) || seen.has(k)) continue;
       seen.add(k);
-      out.push(s);
+      out.push(normalizeTasteGridWord(s));
     }
   }
   return out;
@@ -442,9 +464,11 @@ Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — o
     )
   );
 
-  const filtered = mergeTasteSuggestions(
-    batches.map((b) => (Array.isArray(b.suggestions) ? b.suggestions : [])),
-    exclude
+  let filtered = filterGridLevels(
+    mergeTasteSuggestions(
+      batches.map((b) => (Array.isArray(b.suggestions) ? b.suggestions : [])),
+      exclude
+    )
   );
 
   const baseSystem25 = tasteGridSystem(25, includeTheme);
@@ -461,25 +485,57 @@ Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — o
     for (const s of fill.suggestions ?? []) {
       if (filtered.length >= 25) break;
       const k = s.word?.toLowerCase().trim();
-      if (k && !exclude.has(k) && !filtered.some((x) => x.word.toLowerCase() === k)) filtered.push(s);
+      if (!k || exclude.has(k) || filtered.some((x) => x.word.toLowerCase() === k)) continue;
+      const normalized = normalizeTasteGridWord(s);
+      if (normalized.level === 1) continue;
+      if (normalized.level === 2 && filtered.filter((x) => x.level === 2).length >= 2) continue;
+      filtered.push(normalized);
     }
   }
 
+  filtered = filterGridLevels(filtered);
   return { suggestions: filtered.slice(0, 25) };
 }
 
-const DEEP_DIVE_CORE_SYSTEM = `You are Lexy. Return ONLY valid JSON:
+/** Fill in dual definitions and sources when the model returns a legacy shape. */
+export function normalizeDeepDiveResult(raw: DeepDiveResult): DeepDiveResult {
+  const reference_definition =
+    raw.reference_definition?.trim() || raw.definition?.trim() || "";
+  const lexy_definition =
+    raw.lexy_definition?.trim() || raw.definition?.trim() || reference_definition;
+  return {
+    ...raw,
+    reference_definition,
+    reference_source: raw.reference_source?.trim() || "Oxford English Dictionary",
+    lexy_definition,
+    pronunciation_source: raw.pronunciation_source?.trim() || "Oxford English Dictionary",
+    level: clampVocabLevel(raw.level),
+  };
+}
+
+const DEEP_DIVE_CORE_SYSTEM = `You are Lexy — a literary lexicographer. Return ONLY valid JSON:
 {
   "word": "the word",
-  "pronunciation": "IPA with slashes",
+  "pronunciation": "IPA in slashes — British and American when they differ, British first",
+  "pronunciation_source": "Oxford English Dictionary or Cambridge English Pronouncing Dictionary — pick the best match",
   "part_of_speech": "string",
-  "definition": "precise definition",
+  "reference_definition": "precise dictionary-style gloss — as Oxford would phrase it (1–2 sentences max)",
+  "reference_source": "Oxford English Dictionary",
+  "lexy_definition": "Lexy's gloss: one vivid sentence, plain English, easy to remember — what the word FEELS like to use",
+  "level": 3,
   "nuance": "what this word captures that near-synonyms do not",
   "example_sentences": ["three sentences"],
   "conversation_phrases": ["two or three short, natural one-liners a real person could actually say out loud today — texting a friend, small talk, venting about work, a quick aside — using this word in casual spoken register, not literary or written-page style"],
-  "origin": "etymology"
+  "origin": "etymology — concise"
 }
-All fields required. example_sentences length 3. conversation_phrases length 2 or 3, genuinely sayable out loud (contractions, casual tone are good). Pronunciation mandatory.
+
+${levelPromptBlock()}
+
+Rules:
+- level must match the word's real-world difficulty (most deep-dive words are 3–5).
+- reference_definition and lexy_definition MUST differ in tone: reference = precise/authoritative; lexy = memorable/everyday.
+- pronunciation_source and reference_source must name real references (Oxford English Dictionary, Merriam-Webster, Cambridge Dictionary, etc.).
+- example_sentences length 3. conversation_phrases length 2 or 3, genuinely sayable out loud (contractions, casual tone are good). Pronunciation mandatory.
 ${JSON_ONLY}`;
 
 const DEEP_DIVE_EXTRAS_SYSTEM = `You are Lexy. Return ONLY valid JSON:
@@ -503,14 +559,20 @@ type DeepDiveCore = Omit<DeepDiveResult, "related_words" | "used_by" | "related_
  * word, pronunciation, definition, nuance, examples, and origin — so the UI can show the word
  * immediately instead of waiting on the (slower-to-matter) related-words/etymology extras too.
  */
-export async function deepDiveWord(word: string, onCore?: (core: DeepDiveCore) => void): Promise<DeepDiveResult> {
+export async function deepDiveWord(word: string, onCore?: (core: DeepDiveResult) => void): Promise<DeepDiveResult> {
   const trimmed = word.trim();
   const user = `Full story of the word: "${trimmed}"`;
 
   const [core, extras] = await Promise.all([
     chatJson<DeepDiveCore>(DEEP_DIVE_CORE_SYSTEM, user, 1536).then((c) => {
-      onCore?.(c);
-      return c;
+      const normalized = normalizeDeepDiveResult({
+        ...c,
+        related_words: [],
+        used_by: "",
+        related_form_definitions: [],
+      });
+      onCore?.(normalized);
+      return normalized;
     }),
     chatJson<Pick<DeepDiveResult, "related_words" | "used_by" | "related_form_definitions">>(
       DEEP_DIVE_EXTRAS_SYSTEM,
@@ -520,5 +582,5 @@ export async function deepDiveWord(word: string, onCore?: (core: DeepDiveCore) =
     ),
   ]);
 
-  return { ...core, ...extras };
+  return normalizeDeepDiveResult({ ...core, ...extras });
 }
