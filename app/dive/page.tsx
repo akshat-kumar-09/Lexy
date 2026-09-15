@@ -7,9 +7,11 @@ import { PronounceButton } from "@/components/PronounceButton";
 import { QuickAddRating } from "@/components/QuickAddRating";
 import { RatingDial } from "@/components/RatingDial";
 import { SentenceCapture } from "@/components/SentenceCapture";
+import { VocabLevelBadge } from "@/components/VocabLevelBadge";
 import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
-import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
+import { GRID_LEVEL_TARGETS, VOCAB_LEVELS, WHY_ELEVATED_WORDS } from "@/lib/vocabLevels";
+import { useLexicon, useTasteGridBatch, useTasteProfile, todayISODate } from "@/lib/store";
 import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
@@ -20,6 +22,9 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 function DivePageContent() {
   const explorationThreads = useTasteProfile((s) => s.threads);
   const upsertWord = useLexicon((s) => s.upsertWord);
+  const tasteGridBatch = useTasteGridBatch((s) => s.tasteGridBatch);
+  const setTasteGridBatch = useTasteGridBatch((s) => s.setTasteGridBatch);
+  const clearTasteGridBatch = useTasteGridBatch((s) => s.clearTasteGridBatch);
 
   const pathname = usePathname();
   const router = useRouter();
@@ -28,12 +33,10 @@ function DivePageContent() {
 
   const openedUrlLemmaRef = useRef<string | null>(null);
 
-  const [suggestions, setSuggestions] = useState<TasteGridWord[]>([]);
+  const [liveSuggestions, setLiveSuggestions] = useState<TasteGridWord[]>([]);
   const [gridLoading, setGridLoading] = useState(false);
   const [gridError, setGridError] = useState<string | null>(null);
   const [gridNonce, setGridNonce] = useState(0);
-
-  const lastRatedRef = useRef<{ lastRatedWord: string; lastRating: number } | null>(null);
 
   const [selectedFromGrid, setSelectedFromGrid] = useState<TasteGridWord | null>(null);
   const [query, setQuery] = useState("");
@@ -46,37 +49,43 @@ function DivePageContent() {
   const [rating, setRating] = useState(7.5);
   const [burst, setBurst] = useState(false);
 
-  const loadGrid = useCallback(async () => {
-    setGridLoading(true);
-    setGridError(null);
-    try {
-      const words = useLexicon.getState().words;
-      const ctx = lastRatedRef.current ?? undefined;
-      lastRatedRef.current = null;
-      // Keep the current grid on screen until the first fresh batch actually lands, then
-      // swap it in — no blank "curating…" flash every time a word gets rated and added.
-      let firstBatch = true;
-      const g = await generateTasteGrid(words, ctx, explorationThreads, (batch) => {
-        setSuggestions((prev) => {
-          if (firstBatch) {
-            firstBatch = false;
-            return batch;
-          }
-          return [...prev, ...batch];
+  const loadGrid = useCallback(
+    async (forceNew: boolean) => {
+      const cached = useTasteGridBatch.getState().tasteGridBatch;
+      if (!forceNew && cached.length >= 25) return;
+
+      setGridLoading(true);
+      setGridError(null);
+      setLiveSuggestions([]);
+      try {
+        const words = useLexicon.getState().words;
+        let firstBatch = true;
+        const g = await generateTasteGrid(words, undefined, explorationThreads, (batch) => {
+          setLiveSuggestions((prev) => {
+            if (firstBatch) {
+              firstBatch = false;
+              return batch;
+            }
+            return [...prev, ...batch];
+          });
         });
-      });
-      setSuggestions(g.suggestions);
-    } catch (e) {
-      setGridError(e instanceof Error ? e.message : "Could not refresh suggestions");
-      setSuggestions([]);
-    } finally {
-      setGridLoading(false);
-    }
-  }, [explorationThreads]);
+        setTasteGridBatch(g.suggestions);
+        setLiveSuggestions([]);
+      } catch (e) {
+        setGridError(e instanceof Error ? e.message : "Could not load suggestions");
+      } finally {
+        setGridLoading(false);
+      }
+    },
+    [explorationThreads, setTasteGridBatch]
+  );
 
   useEffect(() => {
-    void loadGrid();
+    void loadGrid(gridNonce > 0);
   }, [gridNonce, loadGrid, explorationThreads]);
+
+  const displayGrid =
+    gridLoading && liveSuggestions.length > 0 ? liveSuggestions : tasteGridBatch;
 
   const openDive = useCallback(async (lemma: string, hint?: TasteGridWord | null) => {
     const trimmed = lemma.trim();
@@ -94,9 +103,7 @@ function DivePageContent() {
     setUserSentence(saved?.user_sentence ?? "");
     try {
       const r = await deepDiveWord(trimmed, (core) => {
-        // Core facts land first — show the word immediately instead of waiting on
-        // related words/etymology too.
-        setResult({ ...core, related_words: [], used_by: "", related_form_definitions: [] });
+        setResult(core);
         setLoadingDive(false);
         setExtrasPending(true);
       });
@@ -145,15 +152,19 @@ function DivePageContent() {
       word: result.word,
       pronunciation: result.pronunciation,
       part_of_speech: result.part_of_speech,
-      definition: result.definition,
+      definition: result.lexy_definition,
       example: ex,
       origin: result.origin,
       rating,
       added: todayISODate(),
       source: "deep_dive",
       user_sentence: sentence,
+      reference_definition: result.reference_definition,
+      reference_source: result.reference_source,
+      lexy_definition: result.lexy_definition,
+      pronunciation_source: result.pronunciation_source,
+      level: result.level,
     });
-    lastRatedRef.current = { lastRatedWord: result.word, lastRating: rating };
     playLexiconChime();
     setBurst(true);
     setTimeout(() => setBurst(false), 700);
@@ -165,11 +176,10 @@ function DivePageContent() {
     if (pathname === "/dive" && searchParams.get("word")) {
       router.replace("/dive", { scroll: false });
     }
-    setGridNonce((n) => n + 1);
   }
 
   function refreshGridManual() {
-    lastRatedRef.current = null;
+    clearTasteGridBatch();
     setGridNonce((n) => n + 1);
   }
 
@@ -185,12 +195,11 @@ function DivePageContent() {
       rating: ratingValue,
       added: todayISODate(),
       source: "deep_dive",
+      level: s.level,
     });
-    lastRatedRef.current = { lastRatedWord: s.word, lastRating: ratingValue };
     playLexiconChime();
     setBurst(true);
     setTimeout(() => setBurst(false), 700);
-    setGridNonce((n) => n + 1);
   }
 
   function closeDiveDetail() {
@@ -225,11 +234,33 @@ function DivePageContent() {
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Word Deep Dive</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
-          Twenty-five words picked for your taste — the set turns over each time you rate one, and Lexy leans into what
-          you love. Your threads (above) steer the palette; change them anytime. Tap a word
-          for the full story; IPA is always in the room. From My Lexicon, open any saved word for the same page —
-          pronunciation, examples, etymology, and related forms.
+          Twenty-five words picked for your taste — mostly{" "}
+          <span className="font-semibold not-italic">Level 3</span> conversation upgrades you can slip into normal talk.
+          Work through the batch at your pace; tap <span className="font-semibold not-italic">New batch</span> when
+          ready. Each deep dive shows a reference meaning plus a Lexy gloss you can retain.
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0]/80 px-4 py-4 sm:px-5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8B7355]">Why bother?</p>
+        <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{WHY_ELEVATED_WORDS}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {([3, 4, 5, 2] as const).map((lv) => (
+          <div
+            key={lv}
+            className="flex items-center gap-2 rounded-full border border-[#EDE8E0] bg-white px-3 py-1.5 text-[11px] text-[#6A6360]"
+          >
+            <VocabLevelBadge level={lv} compact />
+            <span>
+              {GRID_LEVEL_TARGETS[lv].min}–{GRID_LEVEL_TARGETS[lv].max} per batch
+            </span>
+          </div>
+        ))}
+        <span className="self-center text-[11px] italic text-[#7A7268]">
+          Level 1 skipped · {VOCAB_LEVELS[3].audience}
+        </span>
       </div>
 
       <GenreStrip compact />
@@ -238,7 +269,9 @@ function DivePageContent() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Words for your taste</h2>
-            <p className="mt-1 text-xs text-[#8B7355]">25 at a time — they refresh when you rate, so Lexy learns.</p>
+            <p className="mt-1 text-xs text-[#8B7355]">
+              25 at a time — mostly Level 3 · stays put until New batch.
+            </p>
           </div>
           <button
             type="button"
@@ -254,13 +287,13 @@ function DivePageContent() {
           <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{gridError}</p>
         )}
 
-        {gridLoading && suggestions.length === 0 ? (
+        {gridLoading && displayGrid.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
             Curating 25 words that fit the shape of your mind…
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {suggestions.map((s) => (
+            {displayGrid.map((s) => (
               <div
                 key={`${s.word}-${s.pronunciation}`}
                 className="rounded-2xl border border-[#EDE8E0] bg-white p-4 shadow-sm transition sm:hover:border-[#8B7355]/50 sm:hover:shadow-md"
@@ -272,6 +305,7 @@ function DivePageContent() {
                     className="min-w-0 flex-1 text-left"
                   >
                     <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
+                    <VocabLevelBadge level={s.level} compact />
                     <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
                   </button>
                   <QuickAddRating onAdd={(v) => quickAddFromGrid(s, v)} />
@@ -295,8 +329,8 @@ function DivePageContent() {
           </div>
         )}
 
-        {gridLoading && suggestions.length > 0 && (
-          <p className="text-center text-xs italic text-[#B0A898]">Refreshing your words…</p>
+        {gridLoading && displayGrid.length > 0 && (
+          <p className="text-center text-xs italic text-[#B0A898]">Loading a new batch…</p>
         )}
       </section>
 
@@ -376,13 +410,33 @@ function DivePageContent() {
                       <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">
                         {result.word}
                       </h2>
+                      <VocabLevelBadge level={result.level} />
                       <PronounceButton word={result.word} />
                     </div>
                     <IPA className="mt-2 block">{result.pronunciation}</IPA>
+                    <p className="mt-1 text-[11px] text-[#7A7268]">{result.pronunciation_source}</p>
                     <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
                       {result.part_of_speech}
                     </p>
-                    <p className="mt-4 text-sm leading-relaxed text-[#4A4340]">{result.definition}</p>
+
+                    <div className="mt-4 space-y-4">
+                      <div className="rounded-xl border border-[#F0EAE0] bg-[#FBF8F2] p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">
+                          {result.reference_source}
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">
+                          {result.reference_definition}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-[#EDE8E0] bg-white p-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">
+                          Lexy meaning
+                        </p>
+                        <p className="mt-2 font-serif text-sm leading-relaxed text-[#1C1917]">
+                          {result.lexy_definition}
+                        </p>
+                      </div>
+                    </div>
 
                     {relatedForms.length > 0 && (
                       <div className="mt-5 rounded-xl border border-[#F5F0EA] bg-[#FDFBF7] p-4">
@@ -485,7 +539,7 @@ function DivePageContent() {
                       </button>
                     </div>
                     <p className="text-center text-[11px] italic text-[#B0A898]">
-                      Adding refreshes your 25-word grid so Lexy can learn your taste.
+                      Your grid stays put — tap New batch when you want fresh words.
                     </p>
                   </div>
                 </div>

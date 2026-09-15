@@ -7,11 +7,13 @@ import {
   normalizeThreadLabel,
   normalizeThreadList,
 } from "@/lib/threads";
+import { todayISODate as localTodayISODate } from "@/lib/dates";
 import type {
   LexiconData,
   LexiconWord,
   MetaphorDayEntry,
   ScribbleRewriteEntry,
+  TasteGridWord,
 } from "@/lib/types";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
@@ -163,9 +165,7 @@ export function importLexiconFromUnknown(data: unknown): LexiconData | null {
   return normalizeLexiconPayload(data);
 }
 
-export function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+export { localTodayISODate as todayISODate };
 
 interface TasteProfileState {
   /** Free-text themes the user typed — steer Deep Dive & Metaphors */
@@ -234,3 +234,25 @@ export const useTasteProfile = create<TasteProfileState>()(
 /** @deprecated use MAX_EXPLORATION_THREADS */
 export const MAX_GENRES = MAX_EXPLORATION_THREADS;
 export { MAX_EXPLORATION_THREADS };
+
+interface TasteGridBatchState {
+  /** Current 25-word Deep Dive batch — persists until the user taps New batch. */
+  tasteGridBatch: TasteGridWord[];
+  setTasteGridBatch: (words: TasteGridWord[]) => void;
+  clearTasteGridBatch: () => void;
+}
+
+export const useTasteGridBatch = create<TasteGridBatchState>()(
+  persist(
+    (set) => ({
+      tasteGridBatch: [],
+      setTasteGridBatch: (words) => set({ tasteGridBatch: words }),
+      clearTasteGridBatch: () => set({ tasteGridBatch: [] }),
+    }),
+    {
+      name: "lexy-taste-grid",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ tasteGridBatch: s.tasteGridBatch }),
+    }
+  )
+);
