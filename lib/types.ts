@@ -6,12 +6,20 @@ export interface LexiconWord {
   word: string;
   pronunciation: string;
   part_of_speech: string;
+  /** Primary gloss — Lexy’s easy-to-retain meaning when available. */
   definition: string;
   example: string;
   origin: string;
   rating: number;
   added: string;
   source: WordSource;
+  /** Renowned dictionary-style definition (e.g. Oxford). */
+  reference_definition?: string;
+  reference_source?: string;
+  /** Lexy’s memorable gloss — same as definition when saved from Deep Dive. */
+  lexy_definition?: string;
+  /** Where the IPA comes from (e.g. Cambridge). */
+  pronunciation_source?: string;
 }
 
 /** One cell in the daily metaphor grid (10 at a time). */
@@ -83,8 +91,16 @@ export interface RelatedFormDefinition {
 export interface DeepDiveResult {
   word: string;
   pronunciation: string;
+  /** Renowned reference for the IPA (e.g. Oxford English Dictionary). */
+  pronunciation_source: string;
   part_of_speech: string;
-  definition: string;
+  /** Precise dictionary-style definition — Oxford or equivalent. */
+  reference_definition: string;
+  reference_source: string;
+  /** Lexy’s gloss: shorter, vivid, easy to retain. */
+  lexy_definition: string;
+  /** @deprecated use reference_definition — kept for older API responses */
+  definition?: string;
   nuance: string;
   example_sentences: string[];
   origin: string;
@@ -94,7 +110,7 @@ export interface DeepDiveResult {
   related_form_definitions?: RelatedFormDefinition[];
 }
 
-/** One cell in the Deep Dive taste grid — 25 at a time, refreshed as taste updates. */
+/** One cell in the Deep Dive taste grid — 25 at a time until the user requests a new batch. */
 export interface TasteGridWord {
   word: string;
   pronunciation: string;

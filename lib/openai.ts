@@ -155,24 +155,41 @@ export async function analyseScribble(
 }
 
 function metaphorGridSystem(itemCount: number): string {
-  return `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
+  return `You are Lexy — warm, literary, never corporate. You create WEARABLE English metaphors: short phrases a thoughtful person could actually say or write.
+
+Return ONLY valid JSON:
 {
   "suggestions": [
     {
-      "metaphor": "vivid figurative phrase someone could adopt — not a single dictionary lemma",
-      "unpacking": "plain language: what the image means",
-      "image_strength": "one sentence: why this image lands",
-      "example_sentences": ["three natural sentences using or alluding to this metaphor"],
-      "why_for_you": "one short line: why this fits their taste and their exploration themes"
+      "metaphor": "2–7 word phrase — concrete image mapped to a feeling or idea",
+      "unpacking": "One plain sentence: SOURCE IMAGE (concrete) → TARGET (abstract). Start with 'Like' or 'As if'.",
+      "image_strength": "one sentence: why this image lands emotionally",
+      "example_sentences": ["three natural sentences that USE this exact metaphor phrase"],
+      "why_for_you": "one short line: why this fits their taste and exploration themes"
     }
   ]
 }
+
+GOOD (clear image → clear meaning):
+- "a furnace of worry" → mind constantly burning with anxiety
+- "walking on glass" → fragile, careful, expecting to break something
+- "the fog hasn't lifted" → confusion still hasn't cleared
+
+BAD (never produce):
+- Random poetic fragments with no clear mapping ("echo of silence", "velvet thunder")
+- Abstract-on-abstract with no sensory image
+- Single dictionary words or lemmas
+- Invented-sounding literary nonsense that fails: "It felt like ___"
+
 Rules:
 - suggestions must contain EXACTLY ${itemCount} items.
-- Each item needs all fields. example_sentences must have exactly 3 strings.
+- Each metaphor MUST pass: fill in "It felt like [metaphor]" OR "His mind was [metaphor]" — the sentence must make sense.
+- Use a CONCRETE, sensory source (water, fire, weight, light, weather, road, body, glass, fog, furnace, anchor, etc.).
+- unpacking MUST name both the image and what it stands for.
+- example_sentences must embed the metaphor phrase verbatim at least once per sentence.
 - Metaphors must be distinct — no near-duplicates.
-- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive).
-- Another completion fills the rest of this grid in parallel — steer toward noticeably different imagery so batches rarely collide (overlap discarded).`;
+- Do not repeat any phrase in the user exclusion list (case-insensitive).
+- Another completion fills the rest of this grid in parallel — use different source domains (water vs fire vs weight vs light).`;
 }
 
 function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set<string>): MetaphorGridItem[] {
@@ -217,15 +234,15 @@ Already shown or saved today (do NOT repeat these images): ${excludeList}`;
 
   const user5a = `${baseUser}
 
-Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’s grid (another completion supplies batch B). Fresh, specific; clichés only if subverted.`;
+Return ONLY batch A: exactly 5 NEW wearable metaphors — first half of today’s grid (another completion supplies batch B). Each must be a concrete image mapped to a clear feeling. Test every one in "It felt like ___".`;
 
   const user5b = `${baseUser}
 
-Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (another completion supplied batch A). Fresh, specific; clichés only if subverted.`;
+Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the same grid (batch A covered water/weather). Use different domains: fire, weight, road, body, light, glass, anchor. Each must pass "It felt like ___".`;
 
   const [rawA, rawB] = await Promise.all([
-    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5a, user5a, 0.72),
-    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o-mini", system5b, user5b, 0.72),
+    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o", system5a, user5a, 0.55),
+    chatJson<MetaphorGridResponse>(apiKey, "gpt-4o", system5b, user5b, 0.55),
   ]);
 
   const suggestions = mergeMetaphorSuggestions(
@@ -239,10 +256,10 @@ Return ONLY batch B: exactly 5 NEW wearable metaphors — second half of the sam
     const need = 10 - suggestions.length;
     const fill = await chatJson<MetaphorGridResponse>(
       apiKey,
-      "gpt-4o-mini",
+      "gpt-4o",
       `${baseSystem10}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
       `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
-      0.68
+      0.5
     );
     for (const s of fill.suggestions ?? []) {
       if (suggestions.length >= 10) break;
@@ -306,14 +323,13 @@ function mergeTasteSuggestions(
 
 /**
  * Exactly 25 words tailored to current ratings. Excludes words already in the lexicon.
- * Call again after each rating so the grid reflects refined taste.
+ * Fetched when the user opens Deep Dive or taps New batch — not on every rating.
  *
  * Uses two parallel API requests (13 + 12 words) so wall-clock time tracks the slower call instead of one huge completion.
  */
 export async function generateTasteGrid(
   apiKey: string,
   lexicon: Record<string, LexiconWord>,
-  context?: { lastRatedWord?: string; lastRating?: number },
   explorationThreads: string[] = []
 ): Promise<TasteGridResponse> {
   const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
@@ -321,12 +337,7 @@ export async function generateTasteGrid(
 
   const threadBlock = threadsContextForPrompt(explorationThreads);
 
-  const last =
-    context?.lastRatedWord && context.lastRating != null
-      ? `They just rated "${context.lastRatedWord}" at ${context.lastRating}/10 — let that inform the next grid.\n`
-      : "";
-
-  const baseUser = `${last}Words already in their lexicon (do NOT suggest these again): ${excludeList}
+  const baseUser = `Words already in their lexicon (do NOT suggest these again): ${excludeList}
 
 Their lexicon with ratings (higher = more love):
 ${lexiconTastePayload(lexicon)}
@@ -374,33 +385,54 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
   return { suggestions: filtered.slice(0, 25) };
 }
 
+/** Fill in dual definitions and sources when the model returns a legacy shape. */
+export function normalizeDeepDiveResult(raw: DeepDiveResult): DeepDiveResult {
+  const reference_definition =
+    raw.reference_definition?.trim() || raw.definition?.trim() || "";
+  const lexy_definition =
+    raw.lexy_definition?.trim() || raw.definition?.trim() || reference_definition;
+  return {
+    ...raw,
+    reference_definition,
+    reference_source: raw.reference_source?.trim() || "Oxford English Dictionary",
+    lexy_definition,
+    pronunciation_source: raw.pronunciation_source?.trim() || "Oxford English Dictionary",
+  };
+}
+
 export async function deepDiveWord(
   apiKey: string,
   word: string
 ): Promise<DeepDiveResult> {
-  const system = `You are Lexy. Return ONLY valid JSON:
+  const system = `You are Lexy — a literary lexicographer. Return ONLY valid JSON:
 {
   "word": "the word",
-  "pronunciation": "IPA with slashes",
+  "pronunciation": "IPA in slashes — British and American when they differ, British first",
+  "pronunciation_source": "Oxford English Dictionary or Cambridge English Pronouncing Dictionary — pick the best match",
   "part_of_speech": "string",
-  "definition": "precise definition",
+  "reference_definition": "precise dictionary-style gloss — as Oxford would phrase it (1–2 sentences max)",
+  "reference_source": "Oxford English Dictionary",
+  "lexy_definition": "Lexy's gloss: one vivid sentence, plain English, easy to remember — what the word FEELS like to use",
   "nuance": "what this word captures that near-synonyms do not",
   "example_sentences": ["three sentences"],
-  "origin": "etymology",
+  "origin": "etymology — concise",
   "related_words": ["three related words"],
   "used_by": "a memorable literary appearance — author or work",
   "related_form_definitions": [
     { "word": "lemma", "part_of_speech": "adjective|noun|etc", "definition": "short gloss — meaning only" }
   ]
 }
-All fields required except you may omit related_form_definitions if truly none exist (prefer including them).
-example_sentences length 3. related_words length 3. Pronunciation mandatory.
-related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms (e.g. perspicacity → perspicacious, perspicaciously). Exclude the headword itself. Each entry is ONLY word + part_of_speech + definition — no etymology, no examples. If the word is an invariant lemma with no distinct surface forms worth listing, use [].`;
+Rules:
+- reference_definition and lexy_definition MUST differ in tone: reference = precise/authoritative; lexy = memorable/everyday.
+- pronunciation_source and reference_source must name real references (Oxford English Dictionary, Merriam-Webster, Cambridge Dictionary, etc.).
+- example_sentences length 3. related_words length 3. Pronunciation mandatory.
+- related_form_definitions: 3 to 8 entries when the headword has common inflected or derived English forms. Exclude the headword. If none, use [].`;
 
-  return chatJson<DeepDiveResult>(
+  const raw = await chatJson<DeepDiveResult>(
     apiKey,
     "gpt-4o-mini",
     system,
     `Full story of the word: "${word.trim()}"`
   );
+  return normalizeDeepDiveResult(raw);
 }
