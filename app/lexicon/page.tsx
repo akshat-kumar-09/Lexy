@@ -84,7 +84,7 @@ export default function LexiconPage() {
 
       {total === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/80 px-8 py-20 text-center">
-          <p className="font-serif text-xl text-[#B0A898]">Your lexicon is empty.</p>
+          <p className="font-serif text-xl text-[#7A7268]">Your lexicon is empty.</p>
           <p className="mt-3 text-sm leading-relaxed text-[#C8C0B8]">
             The words you love are waiting to be found — try a morning scribble, a deep dive, or today&apos;s metaphor.
           </p>
@@ -94,19 +94,19 @@ export default function LexiconPage() {
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             <div className="rounded-2xl border border-[#EDE8E0] bg-white px-2 py-4 text-center sm:px-4 sm:py-5">
               <p className="font-serif text-2xl font-bold tabular-nums text-[#1C1917] sm:text-3xl">{total}</p>
-              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#B0A898] sm:text-[10px]">
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#7A7268] sm:text-[10px]">
                 Words
               </p>
             </div>
             <div className="rounded-2xl border border-[#EDE8E0] bg-white px-2 py-4 text-center sm:px-4 sm:py-5">
               <p className="font-serif text-2xl font-bold tabular-nums text-[#1C7A40] sm:text-3xl">{favourites.length}</p>
-              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#B0A898] sm:text-[10px]">
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#7A7268] sm:text-[10px]">
                 Favourites
               </p>
             </div>
             <div className="rounded-2xl border border-[#EDE8E0] bg-white px-2 py-4 text-center sm:px-4 sm:py-5">
               <p className="font-serif text-2xl font-bold tabular-nums text-[#1C1917] sm:text-3xl">{avg.toFixed(1)}</p>
-              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#B0A898] sm:text-[10px]">
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#7A7268] sm:text-[10px]">
                 Average
               </p>
             </div>
@@ -146,7 +146,7 @@ export default function LexiconPage() {
 
           {rest.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">All words</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7268]">All words</h2>
               <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white lg:grid lg:grid-cols-2 lg:gap-4 lg:divide-y-0 lg:rounded-none lg:border-0 lg:bg-transparent">
                 {rest.map((w) => (
                   <WordRow key={w.word} w={w} onRemove={() => removeWord(w.word)} />
@@ -157,10 +157,10 @@ export default function LexiconPage() {
 
           <section className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0] p-6">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B7355]">Re-rate a word</h2>
-            <p className="mt-1 text-xs text-[#B0A898]">Tastes shift. Your lexicon can shift with them.</p>
+            <p className="mt-1 text-xs text-[#7A7268]">Tastes shift. Your lexicon can shift with them.</p>
             <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-end">
               <div className="flex-1">
-                <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">Word</label>
+                <label className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A7268]">Word</label>
                 <select
                   className="mt-1 w-full rounded-xl border border-[#EDE8E0] bg-white px-3 py-2.5 text-sm"
                   value={pick ?? ""}

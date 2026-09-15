@@ -135,7 +135,7 @@ export default function MetaphorsPage() {
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Today&apos;s images</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7A7268]">Today&apos;s images</h2>
               <p className="mt-1 text-xs text-[#8B7355]">Ten fresh metaphors — new batch replaces today&apos;s set.</p>
             </div>
             <button
@@ -149,7 +149,7 @@ export default function MetaphorsPage() {
           </div>
 
           {loading && list.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
+            <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#7A7268]">
               Gathering ten metaphors that fit you…
             </div>
           ) : (
@@ -170,7 +170,7 @@ export default function MetaphorsPage() {
           )}
 
           {loading && list.length > 0 && (
-            <p className="text-center text-xs italic text-[#B0A898]">Refreshing your ten…</p>
+            <p className="text-center text-xs italic text-[#7A7268]">Refreshing your ten…</p>
           )}
         </section>
       )}
@@ -247,7 +247,7 @@ export default function MetaphorsPage() {
               >
                 Add to my lexicon
               </button>
-              <p className="mt-3 text-center text-[11px] text-[#B0A898]">
+              <p className="mt-3 text-center text-[11px] text-[#7A7268]">
                 {FAVOURITE_THRESHOLD}+ shows as a favourite on My Lexy.
               </p>
               <button

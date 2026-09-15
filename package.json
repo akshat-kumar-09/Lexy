@@ -9,13 +9,14 @@
     "start": "next start",
     "start:lan": "next start -H 0.0.0.0 -p 3000",
     "lint": "eslint",
+    "test": "tsx --test tests/**/*.test.ts",
     "db:check": "node scripts/verify-neon.mjs"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.12.0",
+    "@clerk/nextjs": "^6.39.6",
     "@neondatabase/serverless": "^0.10.4",
     "framer-motion": "^11.15.0",
-    "next": "^15.1.0",
+    "next": "^15.5.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "zustand": "^5.0.2"
@@ -27,8 +28,9 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.17.0",
-    "eslint-config-next": "^15.1.0",
+    "eslint-config-next": "^15.5.25",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }
 }

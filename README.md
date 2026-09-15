@@ -41,5 +41,5 @@ git push -u origin main
 ## Data & privacy
 
 - **Lexicon (signed in):** Stored per Clerk user in your Postgres database (payload JSON).
-- **OpenAI key:** Enter once. Kept on the device (a long-lived secure httpOnly cookie + `localStorage`) so it survives storage wipes, and—when signed in—saved per user in your database. It is relayed only by Lexy’s same-origin proxy to OpenAI on each request; Lexy never uses a shared key for you.
+- **OpenAI key:** Enter once. Kept on the device in a long-lived **httpOnly cookie** (not `localStorage`, so XSS cannot read it) and—when signed in—encrypted at rest in Postgres (`OPENAI_KEY_ENCRYPTION_SECRET`). Relayed only by Lexy’s same-origin proxy to OpenAI; Lexy never uses a shared key for you.
 - **Exports:** Use **Download .txt** / **Download .json backup** on My Lexy, or **Import lexicon JSON** in Settings.

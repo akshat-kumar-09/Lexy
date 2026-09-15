@@ -10,7 +10,7 @@ type Props = {
 export function RatingDial({ value, onChange, id = "rating", label = "Your rating" }: Props) {
   return (
     <div className="space-y-2">
-      <div className="flex justify-between text-[10px] font-medium uppercase tracking-[0.14em] text-[#B0A898]">
+      <div className="flex justify-between text-[10px] font-medium uppercase tracking-[0.14em] text-[#7A7268]">
         <label htmlFor={id}>{label}</label>
         <span className="tabular-nums text-[#1C1917]">{value.toFixed(1)}</span>
       </div>

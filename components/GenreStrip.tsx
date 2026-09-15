@@ -23,7 +23,7 @@ export function GenreStrip({ compact, className = "", variant = "light", hideBra
   const [examplesOpen, setExamplesOpen] = useState(!compact);
 
   const isDark = variant === "dark";
-  const labelMuted = isDark ? "text-[#B0A898]" : "text-[#B0A898]";
+  const labelMuted = isDark ? "text-[#A8A098]" : "text-[#7A7268]";
   const bodyMuted = isDark ? "text-[#A8A098]" : "text-[#8B7355]";
   const chipOn = isDark
     ? "border-[#8B7355] bg-[#2A2520] text-[#F5EFE0] shadow-[0_0_0_1px_rgba(139,115,85,0.25)]"
@@ -33,7 +33,7 @@ export function GenreStrip({ compact, className = "", variant = "light", hideBra
     : "border-[#EDE8E0] bg-white text-[#4A4340] active:border-[#8B7355]/45";
   const inputCls = isDark
     ? "rounded-xl border border-[#3D3830] bg-[#252220] px-3 py-2.5 text-sm text-[#F5EFE0] outline-none placeholder:text-[#6A6360] focus:border-[#8B7355]"
-    : "rounded-xl border border-[#EDE8E0] bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none placeholder:text-[#B0A898] focus:border-[#8B7355] focus:ring-4 focus:ring-[#8B7355]/15";
+    : "rounded-xl border border-[#EDE8E0] bg-white px-3 py-2.5 text-sm text-[#1C1917] outline-none placeholder:text-[#7A7268] focus:border-[#8B7355] focus:ring-4 focus:ring-[#8B7355]/15";
   const primaryBtn = isDark
     ? "rounded-xl bg-[#8B7355] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.1em] text-[#1C1917] active:opacity-90"
     : "rounded-xl bg-[#1C1917] px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.1em] text-[#F5EFE0] active:opacity-90";

@@ -19,7 +19,7 @@ export function ScribbleLexiconSidebar() {
     <aside className="rounded-2xl border border-[#EDE8E0] bg-white shadow-sm lg:sticky lg:top-6 lg:max-h-[min(85vh,calc(100vh-8rem))] lg:flex lg:flex-col">
       <div className="border-b border-[#F5F0EA] px-4 py-3">
         <h2 className="font-serif text-lg font-bold text-[#1C1917]">My Lexy</h2>
-        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#B0A898]">
+        <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#7A7268]">
           {sorted.length} word{sorted.length === 1 ? "" : "s"} · beside you as you write
         </p>
         <Link
@@ -32,7 +32,7 @@ export function ScribbleLexiconSidebar() {
 
       <div className="overflow-y-auto px-3 py-2 lg:flex-1 lg:min-h-0">
         {sorted.length === 0 ? (
-          <p className="px-1 py-6 text-center font-serif text-sm italic leading-relaxed text-[#B0A898]">
+          <p className="px-1 py-6 text-center font-serif text-sm italic leading-relaxed text-[#7A7268]">
             Your lexicon is empty. The words you love are waiting to be found.
           </p>
         ) : (

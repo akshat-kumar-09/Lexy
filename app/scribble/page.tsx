@@ -184,13 +184,13 @@ export default function ScribblePage() {
                     className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-xs font-medium text-[#4A4340] transition hover:bg-[#FDFBF7]"
                   >
                     <span className="truncate font-serif italic text-[#8B7355]">{label}</span>
-                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[#B0A898]">
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-[#7A7268]">
                       {open ? "Hide" : "Read"}
                     </span>
                   </button>
                   {open && (
                     <div className="border-t border-[#F5F0EA] px-3 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">Original bit</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A7268]">Original bit</p>
                       <p className="mt-1 max-h-24 overflow-y-auto font-serif text-xs italic leading-relaxed text-[#6A6360]">
                         {rw.source_excerpt}
                       </p>
@@ -216,7 +216,7 @@ export default function ScribblePage() {
                 setError(null);
               }}
               className={`flex-1 rounded-xl py-2.5 text-xs font-semibold uppercase tracking-[0.1em] transition ${
-                tab === t ? "bg-[#1C1917] text-[#F5EFE0]" : "text-[#B0A898] hover:text-[#1C1917]"
+                tab === t ? "bg-[#1C1917] text-[#F5EFE0]" : "text-[#7A7268] hover:text-[#1C1917]"
               }`}
             >
               {t === "photo" ? "Photo" : "Type or paste"}
@@ -235,7 +235,7 @@ export default function ScribblePage() {
               onChange={(e) => onPickFile(e.target.files?.[0] ?? null)}
             />
             <span className="text-sm font-medium text-[#6A6360]">Tap to choose a photo</span>
-            <span className="mt-1 text-xs text-[#B0A898]">JPG, PNG, WebP</span>
+            <span className="mt-1 text-xs text-[#7A7268]">JPG, PNG, WebP</span>
           </label>
           {preview && (
             <Image
@@ -322,21 +322,21 @@ export default function ScribblePage() {
             </div>
 
             <section id="scribble-up" className="scroll-mt-32 space-y-3 md:scroll-mt-24">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">Rewritten</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7268]">Rewritten</h2>
               <div className="rounded-2xl border border-[#EDE8E0] bg-white p-4 font-serif text-base leading-[1.85] text-[#1C1917] shadow-sm sm:p-6 sm:text-[17px] sm:leading-[2]">
                 {result.upgraded_version}
               </div>
             </section>
 
             <section id="scribble-wu" className="scroll-mt-32 space-y-3 md:scroll-mt-24">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7268]">
                 Where one word changes everything
               </h2>
               <div className="space-y-3">
                 {result.word_upgrades.map((u, i) => (
                   <div key={i} className="rounded-2xl bg-[#F5EFE0] p-5">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B7355]">Before</p>
-                    <p className="mt-1 text-sm text-[#B0A898] line-through">{u.original_phrase}</p>
+                    <p className="mt-1 text-sm text-[#7A7268] line-through">{u.original_phrase}</p>
                     <p className="mt-3 font-serif text-lg font-semibold text-[#1C1917]">
                       {u.upgraded_word}{" "}
                       <IPA>
@@ -350,11 +350,11 @@ export default function ScribblePage() {
             </section>
 
             <section id="scribble-ideas" className="scroll-mt-32 space-y-3 md:scroll-mt-24">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">Ideas, opened</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7268]">Ideas, opened</h2>
               <div className="space-y-3">
                 {result.key_idea_expansions.map((ex, i) => (
                   <div key={i} className="rounded-2xl border border-[#EDE8E0] bg-white p-5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Your thread</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Your thread</p>
                     <p className="mt-2 font-serif text-lg font-bold text-[#1C1917]">{ex.idea}</p>
                     <p className="mt-3 font-serif text-sm italic leading-relaxed text-[#4A4340]">{ex.expansion}</p>
                   </div>
@@ -363,7 +363,7 @@ export default function ScribblePage() {
             </section>
 
             <section id="scribble-words" className="scroll-mt-32 space-y-4 md:scroll-mt-24">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7268]">
                 Words that felt right for you
               </h2>
               <p className="text-sm italic text-[#8B7355]">
@@ -377,7 +377,7 @@ export default function ScribblePage() {
                       <AddWordBurst show={burst === c.word} />
                       <h3 className="font-serif text-2xl font-bold text-[#1C1917]">{c.word}</h3>
                       <IPA className="mt-1 block text-sm">{c.pronunciation}</IPA>
-                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
+                      <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A7268]">
                         {c.part_of_speech}
                       </p>
                       <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{c.definition}</p>
@@ -419,7 +419,7 @@ export default function ScribblePage() {
       </AnimatePresence>
 
       {result && (
-        <p className="text-center text-xs text-[#B0A898]">
+        <p className="text-center text-xs text-[#7A7268]">
           Original text length: {analysedText.length} characters — your voice, elevated.
         </p>
       )}

@@ -12,7 +12,7 @@ export function LexyHomePreview() {
       <div className="pointer-events-none absolute -left-10 bottom-0 h-36 w-36 rounded-full bg-[#8B7355]/12 sm:h-40 sm:w-40" />
       <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-[#8B7355]/10 sm:-right-8 sm:-top-8 sm:h-36 sm:w-36" />
 
-      <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#B0A898] sm:text-[10px]">Your threads</p>
+      <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#7A7268] sm:text-[10px]">Your threads</p>
       <p className="mt-2.5 max-w-md font-serif text-lg font-bold leading-tight tracking-tight text-[#F5EFE0] sm:mt-3 sm:text-xl md:text-2xl">
         Your imagination is the limit.
       </p>

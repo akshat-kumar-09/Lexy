@@ -5,6 +5,9 @@
   --lexy-ink: #1c1917;
   --lexy-gold: #8b7355;
   --lexy-favourite: #1c7a40;
+  /* WCAG AA on parchment — replaces #B0A898 / #C8BFB0 on light surfaces */
+  --lexy-muted: #7a7268;
+  --lexy-muted-soft: #8a8278;
 }
 
 html {

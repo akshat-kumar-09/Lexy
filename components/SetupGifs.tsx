@@ -58,7 +58,7 @@ function StepMedia({ videoSrc, gifSrc, label, caption }: StepMediaProps) {
         >
           <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">Visual step</p>
           <p className="mt-2 text-xs leading-relaxed text-[#6A6360]">{caption}</p>
-          <p className="mt-3 text-[10px] leading-snug text-[#B0A898]">
+          <p className="mt-3 text-[10px] leading-snug text-[#7A7268]">
             Record your phone or desktop screen, export as MP4 or GIF, then save under{" "}
             <code className="rounded bg-white px-1 py-0.5 text-[9px]">{hintPath}</code>
             — use filenames such as{" "}
@@ -141,7 +141,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
 
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-5 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">
             1 · Add Lexy to your home screen
           </h2>
           <div className="flex rounded-full border border-[#EDE8E0] p-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]">
@@ -197,7 +197,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
       </section>
 
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-5 sm:p-6">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">
           2 · Add intelligence (one time)
         </h2>
         <ul className="list-inside list-disc space-y-1 text-sm leading-relaxed text-[#4A4340]">
@@ -223,7 +223,7 @@ export function SetupGifs({ embedded }: SetupGifsProps) {
             caption="Optional clip: platform.openai.com → API keys → Create."
           />
         </div>
-        <p className="text-center text-xs text-[#B0A898]">
+        <p className="text-center text-xs text-[#7A7268]">
           {embedded ? (
             <>Paste your key in the field below on this page.</>
           ) : (

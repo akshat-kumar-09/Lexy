@@ -100,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               key={n.href}
               href={n.href}
               className={`flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-0.5 py-2 text-[11px] font-semibold leading-tight active:bg-[#F5EFE0] ${
-                active ? "text-[#1C1917]" : "text-[#B0A898]"
+                active ? "text-[#1C1917]" : "text-[#7A7268]"
               }`}
             >
               <span className="max-w-full truncate text-center">{n.short}</span>

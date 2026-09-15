@@ -243,7 +243,7 @@ function DivePageContent() {
       <section className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Words for your taste</h2>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7A7268]">Words for your taste</h2>
             <p className="mt-1 text-xs text-[#8B7355]">25 at a time — they refresh when you rate, so Lexy learns.</p>
           </div>
           <button
@@ -261,7 +261,7 @@ function DivePageContent() {
         )}
 
         {gridLoading && suggestions.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#B0A898]">
+          <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/60 px-6 py-16 text-center font-serif text-sm italic text-[#7A7268]">
             Curating 25 words that fit the shape of your mind…
           </div>
         ) : (
@@ -275,7 +275,7 @@ function DivePageContent() {
               >
                 <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
                 <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
-                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#B0A898]">
+                <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7A7268]">
                   {s.part_of_speech}
                 </p>
                 <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#6A6360]">{s.definition}</p>
@@ -286,7 +286,7 @@ function DivePageContent() {
         )}
 
         {gridLoading && suggestions.length > 0 && (
-          <p className="text-center text-xs italic text-[#B0A898]">Refreshing your words…</p>
+          <p className="text-center text-xs italic text-[#7A7268]">Refreshing your words…</p>
         )}
       </section>
 
@@ -333,7 +333,7 @@ function DivePageContent() {
               )}
 
               {selectedFromGrid && !loadingDive && result && (
-                <p className="text-xs text-[#B0A898]">
+                <p className="text-xs text-[#7A7268]">
                   From your grid: <span className="font-medium text-[#1C1917]">{selectedFromGrid.word}</span>
                 </p>
               )}
@@ -349,7 +349,7 @@ function DivePageContent() {
                       <PronounceButton word={result.word} />
                     </div>
                     <IPA className="mt-2 block">{result.pronunciation}</IPA>
-                    <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
+                    <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#7A7268]">
                       {result.part_of_speech}
                     </p>
                     <p className="mt-4 text-sm leading-relaxed text-[#4A4340]">{result.definition}</p>
@@ -363,7 +363,7 @@ function DivePageContent() {
                           {relatedForms.map((rf) => (
                             <li key={`${rf.word}-${rf.part_of_speech}`} className="text-sm leading-relaxed text-[#4A4340]">
                               <span className="font-serif font-semibold text-[#1C1917]">{rf.word}</span>
-                              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#B0A898]">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7A7268]">
                                 {" "}
                                 · {rf.part_of_speech}
                               </span>
@@ -381,7 +381,7 @@ function DivePageContent() {
                   </div>
 
                   <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">In three sentences</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">In three sentences</p>
                     <div className="mt-3 space-y-3">
                       {result.example_sentences.map((ex, i) => (
                         <p key={i} className="border-l-2 border-[#EDE8E0] pl-3 font-serif text-sm italic text-[#8B7355]">
@@ -392,10 +392,10 @@ function DivePageContent() {
                   </div>
 
                   <div className="rounded-2xl border border-[#EDE8E0] bg-white p-6">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Etymology</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Etymology</p>
                     <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.origin}</p>
                     <div className="mt-6 border-t border-[#F5F0EA] pt-6">
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">
                         Where you might have met it
                       </p>
                       <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{result.used_by}</p>
@@ -404,7 +404,7 @@ function DivePageContent() {
 
                   {(result.related_words ?? []).length > 0 && (
                     <div>
-                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Kindred words</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Kindred words</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {result.related_words.map((rw) => (
                           <Link
@@ -428,7 +428,7 @@ function DivePageContent() {
                     >
                       {alreadySaved ? "Update rating in lexicon" : "Rate & add to lexicon"}
                     </button>
-                    <p className="mt-3 text-center text-[11px] italic text-[#B0A898]">
+                    <p className="mt-3 text-center text-[11px] italic text-[#7A7268]">
                       Adding refreshes your 25-word grid so Lexy can learn your taste.
                     </p>
                   </div>
@@ -474,7 +474,7 @@ export default function DivePage() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-4xl pb-8 font-serif text-sm italic text-[#B0A898] lg:max-w-6xl xl:max-w-7xl">Opening Deep Dive…</div>
+        <div className="mx-auto max-w-4xl pb-8 font-serif text-sm italic text-[#7A7268] lg:max-w-6xl xl:max-w-7xl">Opening Deep Dive…</div>
       }
     >
       <DivePageContent />

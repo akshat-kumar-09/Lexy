@@ -1,8 +1,11 @@
+import { assertSameOrigin, readJsonBody } from "@/lib/apiGuard";
 import { auth } from "@clerk/nextjs/server";
 import { mergeLexiconPreferLocal, normalizeLexiconPayload } from "@/lib/lexiconMigrate";
-import { NextResponse } from "next/server";
-import type { LexiconData } from "@/lib/types";
 import { getSql } from "@/lib/db";
+import type { LexiconData } from "@/lib/types";
+import { NextRequest, NextResponse } from "next/server";
+
+const MAX_LEXICON_BODY_BYTES = 4 * 1024 * 1024;
 
 function parseBody(data: unknown): LexiconData | null {
   return normalizeLexiconPayload(data);
@@ -64,7 +67,10 @@ export async function GET() {
  * tombstones so genuine deletes still propagate. Old clients without
  * `deleted_words` get safe additive behaviour automatically.
  */
-export async function PUT(req: Request) {
+export async function PUT(req: NextRequest) {
+  const originErr = assertSameOrigin(req);
+  if (originErr) return originErr;
+
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -74,18 +80,14 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Database not configured" }, { status: 503 });
   }
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
+  const parsed = await readJsonBody(req, MAX_LEXICON_BODY_BYTES);
+  if ("error" in parsed) return parsed.error;
 
-  const incoming = parseBody(body);
+  const incoming = parseBody(parsed.data);
   if (!incoming) {
     return NextResponse.json({ error: "Invalid lexicon shape" }, { status: 400 });
   }
-  const deletedWords = parseDeletedWords(body);
+  const deletedWords = parseDeletedWords(parsed.data);
 
   const rows = await sql`
     SELECT payload FROM lexicon_snapshots WHERE user_id = ${userId}

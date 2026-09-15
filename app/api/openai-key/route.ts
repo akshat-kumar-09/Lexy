@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
+import { assertSameOrigin, readJsonBody } from "@/lib/apiGuard";
 import { COOKIE_NAME } from "@/lib/types";
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Device-durable storage for the user's OpenAI key, independent of sign-in.
@@ -11,6 +12,7 @@ import { COOKIE_NAME } from "@/lib/types";
  */
 
 const MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+const MAX_BODY_BYTES = 8 * 1024;
 
 function isSecure() {
   return process.env.NODE_ENV === "production";
@@ -24,13 +26,13 @@ export async function GET(req: NextRequest) {
 
 /** POST: body `{ "key": "sk-..." }` — empty string clears the cookie. */
 export async function POST(req: NextRequest) {
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
-  }
-  const raw = (body as { key?: unknown }).key;
+  const originErr = assertSameOrigin(req);
+  if (originErr) return originErr;
+
+  const parsed = await readJsonBody(req, MAX_BODY_BYTES);
+  if ("error" in parsed) return parsed.error;
+
+  const raw = parsed.data.key;
   const key = typeof raw === "string" ? raw.trim() : "";
 
   const res = NextResponse.json({ ok: true });

@@ -83,15 +83,15 @@ export default function SettingsPage() {
       <div>
         <h1 className="font-serif text-3xl font-bold text-[#1C1917]">Settings</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#6A6360]">
-          Enter your key once. It&apos;s remembered on this device in a long-lived secure cookie — so it survives even
-          when your phone clears app storage — and, when you&apos;re signed in, it&apos;s also saved with your account so
-          it follows you to other devices. You always bring your own OpenAI usage; Lexy never uses a shared key for you.
+          Enter your key once. It&apos;s remembered on this device in a long-lived secure httpOnly cookie — not in
+          browser storage — and, when you&apos;re signed in, encrypted in your database. You always bring your own OpenAI
+          usage; Lexy never uses a shared key for you.
         </p>
       </div>
 
       <section id="setup" className="scroll-mt-24 space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
-          <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Get started</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Get started</h2>
           <Link
             href="/start"
             className="text-[10px] font-semibold uppercase tracking-[0.1em] text-[#8B7355] underline-offset-2 hover:underline"
@@ -110,7 +110,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-3 rounded-2xl border border-[#EDE8E0] bg-white p-6">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Account</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Account</h2>
         {!clerkConfigured ? (
           <p className="text-sm leading-relaxed text-[#6A6360]">
             To enable sign-in and cloud lexicon sync, add Clerk keys from <code className="rounded bg-[#F5F0EA] px-1.5 py-0.5 text-xs">.env.example</code> to{" "}
@@ -141,9 +141,9 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">OpenAI API key</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">OpenAI API key</h2>
         <div className="space-y-2">
-          <label htmlFor="key" className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+          <label htmlFor="key" className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">
             Key (browser + account when signed in)
           </label>
           <input
@@ -165,13 +165,13 @@ export default function SettingsPage() {
           {saved ? "Saved" : "Save key"}
         </button>
 
-        <p className="text-xs leading-relaxed text-[#B0A898]">
+        <p className="text-xs leading-relaxed text-[#7A7268]">
           Without a key, Morning Scribble, Metaphors, and Deep Dive stay idle. The lexicon works either way.
         </p>
       </section>
 
       <section className="space-y-4 rounded-2xl border border-[#EDE8E0] bg-white p-6">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Exploration threads</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Exploration threads</h2>
         <p className="text-sm leading-relaxed text-[#6A6360]">
           Name themes in your own words — Metaphors and Deep Dive orbit them for now. Ratings still teach Lexy what to
           keep.
@@ -180,7 +180,7 @@ export default function SettingsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">Restore & merge backups</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">Restore & merge backups</h2>
         <p className="text-sm leading-relaxed text-[#6A6360]">
           From <strong className="font-medium text-[#4A4340]">My Lexy</strong>, download{" "}
           <code className="rounded bg-[#F5F0EA] px-1.5 py-0.5 text-xs">.json</code> on each device. Use{" "}

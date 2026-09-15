@@ -13,8 +13,11 @@ import type {
   MetaphorDayEntry,
   ScribbleRewriteEntry,
 } from "@/lib/types";
+import { todayISODate } from "@/lib/dates";
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+
+export { todayISODate };
 
 const empty: LexiconData = { words: {}, metaphor_history: [], scribble_rewrites: [] };
 
@@ -32,7 +35,9 @@ export const useSettings = create<SettingsState>()(
     {
       name: "lexy-settings",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ openaiApiKey: s.openaiApiKey }),
+      // API key is never written to localStorage (XSS-readable). The httpOnly cookie
+      // and signed-in cloud copy are the durable stores; OpenAIKey*Sync restores them.
+      partialize: () => ({}),
     }
   )
 );
@@ -180,10 +185,6 @@ export const useLexicon = create<LexiconStore>()(
 
 export function importLexiconFromUnknown(data: unknown): LexiconData | null {
   return normalizeLexiconPayload(data);
-}
-
-export function todayISODate(): string {
-  return new Date().toISOString().slice(0, 10);
 }
 
 interface TasteProfileState {

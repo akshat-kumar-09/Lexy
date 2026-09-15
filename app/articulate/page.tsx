@@ -31,7 +31,7 @@ export default function ArticulatePage() {
           <h2 className="font-serif text-lg font-bold text-[#1C1917] sm:text-xl">
             Master-facts
           </h2>
-          <p className="text-[11px] text-[#B0A898]">12 ideas · one picture each</p>
+          <p className="text-[11px] text-[#7A7268]">12 ideas · one picture each</p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -51,7 +51,7 @@ export default function ArticulatePage() {
                   {f.headline}
                 </h3>
                 <p className="mt-1 text-[12.5px] leading-snug text-[#6A6360]">{f.caption}</p>
-                <p className="mt-auto pt-2 text-[10.5px] leading-tight text-[#B0A898]">{f.source}</p>
+                <p className="mt-auto pt-2 text-[10.5px] leading-tight text-[#7A7268]">{f.source}</p>
               </div>
             </article>
           ))}
@@ -82,7 +82,7 @@ export default function ArticulatePage() {
           <h2 className="font-serif text-lg font-bold text-[#1C1917] sm:text-xl">
             Speak &amp; hear yourself
           </h2>
-          <p className="text-[11px] text-[#B0A898]">stays on your device</p>
+          <p className="text-[11px] text-[#7A7268]">stays on your device</p>
         </div>
 
         <SpeakingStudio />

@@ -77,7 +77,7 @@ export function VoiceValuedButton() {
               <p className="mt-2 text-xs leading-relaxed text-[#6A6360]">
                 A rough edge, a dream feature, a line that confused you — we read every note we get.
               </p>
-              <label htmlFor={`${id}-note`} className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#B0A898]">
+              <label htmlFor={`${id}-note`} className="mt-4 block text-[10px] font-semibold uppercase tracking-[0.14em] text-[#7A7268]">
                 Your words
               </label>
               <textarea
@@ -88,7 +88,7 @@ export function VoiceValuedButton() {
                 placeholder="What would you change or cherish more?"
                 className="mt-1.5 w-full resize-y rounded-xl border border-[#EDE8E0] bg-white p-3 text-sm text-[#1C1917] outline-none ring-[#8B7355]/15 focus:border-[#8B7355] focus:ring-4"
               />
-              <p className="mt-2 text-[10px] leading-relaxed text-[#B0A898]">
+              <p className="mt-2 text-[10px] leading-relaxed text-[#7A7268]">
                 Opens your email app to send — or set{" "}
                 <code className="rounded bg-[#F5F0EA] px-1">NEXT_PUBLIC_FEEDBACK_URL</code> to a form.
               </p>

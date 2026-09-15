@@ -35,14 +35,14 @@ export default function HomePage() {
             className="group flex items-center justify-between rounded-2xl border border-[#EDE8E0] bg-white px-5 py-4 shadow-sm transition-all active:border-[#8B7355]/35 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/40 sm:hover:shadow-md"
           >
             <h2 className="font-serif text-xl font-bold text-[#1C1917] group-hover:text-[#8B7355]">{c.title}</h2>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-[#B0A898] group-hover:text-[#8B7355]">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" className="shrink-0 text-[#7A7268] group-hover:text-[#8B7355]">
               <path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Link>
         ))}
       </div>
 
-      <p className="text-center text-xs text-[#B0A898]">
+      <p className="text-center text-xs text-[#7A7268]">
         New to Lexy?{" "}
         <Link href="/start" className="font-semibold text-[#8B7355] underline-offset-2 hover:underline">
           Get started
