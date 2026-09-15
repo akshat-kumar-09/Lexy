@@ -5,9 +5,11 @@ import { GenreStrip } from "@/components/GenreStrip";
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
 import { RatingDial } from "@/components/RatingDial";
+import { VocabLevelBadge } from "@/components/VocabLevelBadge";
 import { deepDiveWord, generateTasteGrid } from "@/lib/openai";
 import { playLexiconChime } from "@/lib/sound";
 import { tasteRatingsLine } from "@/lib/lexyCopy";
+import { GRID_LEVEL_TARGETS, VOCAB_LEVELS, WHY_ELEVATED_WORDS } from "@/lib/vocabLevels";
 import { useLexicon, useSettings, useTasteGridBatch, useTasteProfile, todayISODate } from "@/lib/store";
 import type { DeepDiveResult, LexiconWord, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -33,6 +35,7 @@ function lexiconWordToFallback(w: LexiconWord): DeepDiveResult {
     reference_definition: w.reference_definition ?? w.definition,
     reference_source: w.reference_source ?? "Oxford English Dictionary",
     lexy_definition: w.lexy_definition ?? w.definition,
+    level: w.level ?? 3,
     nuance:
       "This is what you saved in your lexicon. Add your OpenAI API key in Settings anytime you want a fresh deep dive — nuance, richer examples, related forms, and etymology fetched anew.",
     example_sentences,
@@ -172,6 +175,7 @@ function DivePageContent() {
       lexy_definition: result.lexy_definition,
       reference_definition: result.reference_definition,
       reference_source: result.reference_source,
+      level: result.level,
       example: ex,
       origin: result.origin,
       rating,
@@ -227,10 +231,31 @@ function DivePageContent() {
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Word Deep Dive</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
-          Twenty-five words picked for your taste — work through the whole batch at your pace. Tap{" "}
-          <span className="font-semibold not-italic">New batch</span> when you want a fresh set. Your threads steer the
-          palette. Each deep dive shows a renowned reference meaning plus a Lexy gloss you can actually retain.
+          Twenty-five words picked for your taste — mostly{" "}
+          <span className="font-semibold not-italic">Level 3</span> conversation upgrades you can slip into normal talk.
+          Work through the batch at your pace; tap <span className="font-semibold not-italic">New batch</span> when
+          ready. Each deep dive shows a reference meaning plus a Lexy gloss you can retain.
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-[#EDE8E0] bg-[#F9F6F0]/80 px-4 py-4 sm:px-5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#8B7355]">Why bother?</p>
+        <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{WHY_ELEVATED_WORDS}</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {([3, 4, 5, 2] as const).map((lv) => (
+          <div
+            key={lv}
+            className="flex items-center gap-2 rounded-full border border-[#EDE8E0] bg-white px-3 py-1.5 text-[11px] text-[#6A6360]"
+          >
+            <VocabLevelBadge level={lv} compact />
+            <span>
+              {GRID_LEVEL_TARGETS[lv].min}–{GRID_LEVEL_TARGETS[lv].max} per batch
+            </span>
+          </div>
+        ))}
+        <span className="self-center text-[11px] italic text-[#7A7268]">Level 1 skipped · {VOCAB_LEVELS[3].audience}</span>
       </div>
 
       <GenreStrip compact />
@@ -249,7 +274,9 @@ function DivePageContent() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#7A7268]">Words for your taste</h2>
-            <p className="mt-1 text-xs text-[#8B7355]">25 at a time — stays put until you tap New batch.</p>
+            <p className="mt-1 text-xs text-[#8B7355]">
+              25 at a time — mostly Level 3 · stays put until New batch.
+            </p>
           </div>
           <button
             type="button"
@@ -278,7 +305,10 @@ function DivePageContent() {
                 onClick={() => void openDive(s.word, s)}
                 className="rounded-2xl border border-[#EDE8E0] bg-white p-4 text-left shadow-sm transition active:border-[#8B7355]/50 active:bg-[#FDFBF7] sm:hover:border-[#8B7355]/50 sm:hover:shadow-md"
               >
-                <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
+                  <VocabLevelBadge level={s.level} compact />
+                </div>
                 <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
                 <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7A7268]">
                   {s.part_of_speech}
@@ -351,6 +381,7 @@ function DivePageContent() {
                       <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">
                         {result.word}
                       </h2>
+                      <VocabLevelBadge level={result.level} />
                       <PronounceButton word={result.word} />
                     </div>
                     <IPA className="mt-2 block">{result.pronunciation}</IPA>

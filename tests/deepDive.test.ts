@@ -22,6 +22,7 @@ describe("normalizeDeepDiveResult", () => {
     assert.equal(out.lexy_definition, raw.definition);
     assert.equal(out.reference_source, "Oxford English Dictionary");
     assert.equal(out.pronunciation_source, "Oxford English Dictionary");
+    assert.equal(out.level, 3);
   });
 
   it("preserves distinct reference and lexy glosses", () => {
@@ -33,6 +34,7 @@ describe("normalizeDeepDiveResult", () => {
       reference_definition: "A pleasant smell after rain on dry ground.",
       reference_source: "Oxford English Dictionary",
       lexy_definition: "That earthy smell when rain hits dry pavement.",
+      level: 4,
       nuance: "—",
       example_sentences: ["a", "b", "c"],
       origin: "Greek",

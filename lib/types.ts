@@ -1,3 +1,5 @@
+import type { VocabLevel } from "@/lib/vocabLevels";
+
 export const COOKIE_NAME = "lexy_oai";
 
 export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily";
@@ -20,6 +22,8 @@ export interface LexiconWord {
   lexy_definition?: string;
   /** Where the IPA comes from (e.g. Cambridge). */
   pronunciation_source?: string;
+  /** 1 = everyone knows … 5 = rare. Deep Dive words are usually 3–5. */
+  level?: VocabLevel;
 }
 
 /** One cell in the daily metaphor grid (10 at a time). */
@@ -101,6 +105,8 @@ export interface DeepDiveResult {
   lexy_definition: string;
   /** @deprecated use reference_definition — kept for older API responses */
   definition?: string;
+  /** 1 = everyone knows … 5 = rare. */
+  level: VocabLevel;
   nuance: string;
   example_sentences: string[];
   origin: string;
@@ -117,6 +123,8 @@ export interface TasteGridWord {
   part_of_speech: string;
   definition: string;
   why_for_you: string;
+  /** 1 = everyone knows … 5 = rare. Grid is mostly 3 with some 4–5. */
+  level: VocabLevel;
 }
 
 export interface TasteGridResponse {

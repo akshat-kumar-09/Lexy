@@ -1,3 +1,4 @@
+import { clampVocabLevel, levelPromptBlock } from "@/lib/vocabLevels";
 import { threadsContextForPrompt } from "@/lib/threads";
 import type {
   DeepDiveResult,
@@ -288,20 +289,41 @@ function tasteGridSystem(itemCount: number): string {
       "word": "lemma",
       "pronunciation": "IPA with slashes — mandatory on every word",
       "part_of_speech": "noun|verb|adjective|etc",
+      "level": 3,
       "definition": "one concise line (max ~18 words)",
       "why_for_you": "one short line: why this word fits their emerging taste (not generic)"
     }
   ]
 }
+
+${levelPromptBlock()}
+
 Rules:
 - suggestions must contain EXACTLY ${itemCount} items.
-- Every word MUST have IPA pronunciation in slashes.
+- Every word MUST have IPA pronunciation in slashes and an integer level 1–5.
 - Do not include any word the user already has in their lexicon (case-insensitive match on lemma).
 - Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
 - Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
-- Words should be real English vocabulary a serious reader would meet (include some uncommon gems).
+- Level 3 words should be CONVERSATION-READY: someone could use them in a text or meeting without sounding like they're showing off.
 - If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.
 - Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).`;
+}
+
+function normalizeTasteGridWord(s: TasteGridWord): TasteGridWord {
+  return { ...s, level: clampVocabLevel(s.level) };
+}
+
+/** Drop level-1 words and cap level-2 — the grid is for upgrades, not basics. */
+function filterGridLevels(words: TasteGridWord[]): TasteGridWord[] {
+  let twos = 0;
+  return words.map(normalizeTasteGridWord).filter((w) => {
+    if (w.level === 1) return false;
+    if (w.level === 2) {
+      twos += 1;
+      return twos <= 2;
+    }
+    return true;
+  });
 }
 
 function mergeTasteSuggestions(
@@ -315,7 +337,7 @@ function mergeTasteSuggestions(
       const k = s.word?.toLowerCase().trim();
       if (!k || exclude.has(k) || seen.has(k)) continue;
       seen.add(k);
-      out.push(s);
+      out.push(normalizeTasteGridWord(s));
     }
   }
   return out;
@@ -359,9 +381,11 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
     chatJson<{ suggestions: TasteGridWord[] }>(apiKey, "gpt-4o-mini", system12, user12, 0.75),
   ]);
 
-  const filtered = mergeTasteSuggestions(
-    [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
-    exclude
+  let filtered = filterGridLevels(
+    mergeTasteSuggestions(
+      [Array.isArray(rawA.suggestions) ? rawA.suggestions : [], Array.isArray(rawB.suggestions) ? rawB.suggestions : []],
+      exclude
+    )
   );
 
   const baseSystem25 = tasteGridSystem(25);
@@ -378,10 +402,15 @@ Return ONLY batch B: exactly 12 NEW words — the other half of the same grid (a
     for (const s of fill.suggestions ?? []) {
       if (filtered.length >= 25) break;
       const k = s.word?.toLowerCase().trim();
-      if (k && !exclude.has(k) && !filtered.some((x) => x.word.toLowerCase() === k)) filtered.push(s);
+      if (!k || exclude.has(k) || filtered.some((x) => x.word.toLowerCase() === k)) continue;
+      const normalized = normalizeTasteGridWord(s);
+      if (normalized.level === 1) continue;
+      if (normalized.level === 2 && filtered.filter((x) => x.level === 2).length >= 2) continue;
+      filtered.push(normalized);
     }
   }
 
+  filtered = filterGridLevels(filtered);
   return { suggestions: filtered.slice(0, 25) };
 }
 
@@ -397,6 +426,7 @@ export function normalizeDeepDiveResult(raw: DeepDiveResult): DeepDiveResult {
     reference_source: raw.reference_source?.trim() || "Oxford English Dictionary",
     lexy_definition,
     pronunciation_source: raw.pronunciation_source?.trim() || "Oxford English Dictionary",
+    level: clampVocabLevel(raw.level),
   };
 }
 
@@ -413,6 +443,7 @@ export async function deepDiveWord(
   "reference_definition": "precise dictionary-style gloss — as Oxford would phrase it (1–2 sentences max)",
   "reference_source": "Oxford English Dictionary",
   "lexy_definition": "Lexy's gloss: one vivid sentence, plain English, easy to remember — what the word FEELS like to use",
+  "level": 3,
   "nuance": "what this word captures that near-synonyms do not",
   "example_sentences": ["three sentences"],
   "origin": "etymology — concise",
@@ -422,7 +453,10 @@ export async function deepDiveWord(
     { "word": "lemma", "part_of_speech": "adjective|noun|etc", "definition": "short gloss — meaning only" }
   ]
 }
+${levelPromptBlock()}
+
 Rules:
+- level must match the word's real-world difficulty (most deep-dive words are 3–5).
 - reference_definition and lexy_definition MUST differ in tone: reference = precise/authoritative; lexy = memorable/everyday.
 - pronunciation_source and reference_source must name real references (Oxford English Dictionary, Merriam-Webster, Cambridge Dictionary, etc.).
 - example_sentences length 3. related_words length 3. Pronunciation mandatory.
