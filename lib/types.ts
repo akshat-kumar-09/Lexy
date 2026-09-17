@@ -1,4 +1,4 @@
-export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily";
+export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily" | "articulate";
 
 export interface LexiconWord {
   word: string;
@@ -115,4 +115,27 @@ export interface TasteGridResponse {
 
 export interface MetaphorGridResponse {
   suggestions: MetaphorGridItem[];
+}
+
+/** One lemma from “name this feeling” — primary or a neighbor shade. */
+export interface FeelingNameCandidate {
+  word: string;
+  pronunciation: string;
+  part_of_speech: string;
+  definition: string;
+  origin: string;
+  /** Why this word fits this situation (or, for a neighbor, when you'd pick it instead). */
+  why: string;
+  /** Their thought, same voice, using this word — paste-ready. */
+  rewritten_phrase: string;
+}
+
+export interface FeelingNameResult {
+  /** The imprecise word or short phrase they reached for. */
+  vague_label: string;
+  /** What that vague label names, and why it misses this situation. */
+  why_not_that: string;
+  primary: FeelingNameCandidate;
+  /** Distinct alternative shades — 2 or 3. */
+  neighbors: FeelingNameCandidate[];
 }

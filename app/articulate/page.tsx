@@ -1,4 +1,5 @@
 import { FactVisual } from "@/components/FactVisual";
+import { FeelingFinder } from "@/components/FeelingFinder";
 import { SpeakingStudio } from "@/components/SpeakingStudio";
 import { LEVER_GROUPS, MASTER_FACTS, STUDIO_TIPS } from "@/lib/articulation";
 import type { Metadata } from "next";
@@ -6,7 +7,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Articulate — the science of exuberant communication | Lexy",
   description:
-    "Visual master-facts that change how you think about language, the levers of tone and body, and a studio for recording and speaking.",
+    "Name a feeling in your own words and get the precise one back — plus master-facts, the levers of tone and body, and a studio for recording and speaking.",
 };
 
 export default function ArticulatePage() {
@@ -21,9 +22,11 @@ export default function ArticulatePage() {
           Say it clearly. Be understood.
         </h1>
         <p className="max-w-xl text-[13px] leading-relaxed text-[#6A6360]">
-          What we can name, we can face. The science of articulation — at a glance.
+          What we can name, we can face. Describe a feeling in your own words — then the science, at a glance.
         </p>
       </header>
+
+      <FeelingFinder />
 
       {/* Master facts — visual-first grid */}
       <section className="space-y-4">

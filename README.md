@@ -9,7 +9,7 @@ npm install
 cp .env.example .env.local
 ```
 
-Fill `.env.local` with an `ANTHROPIC_API_KEY` (powers Morning Scribble, Metaphors, and Deep Dive for everyone), Clerk keys from the [Clerk dashboard](https://dashboard.clerk.com), and (for cloud sync) a [Neon](https://neon.tech) `DATABASE_URL`. In Neon’s SQL editor, run `scripts/neon-schema.sql` once.
+Fill `.env.local` with an `ANTHROPIC_API_KEY` (powers Morning Scribble, Metaphors, Deep Dive, and Name this feeling for everyone), Clerk keys from the [Clerk dashboard](https://dashboard.clerk.com), and (for cloud sync) a [Neon](https://neon.tech) `DATABASE_URL`. In Neon’s SQL editor, run `scripts/neon-schema.sql` once.
 
 ```bash
 npm run dev
