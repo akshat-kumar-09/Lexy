@@ -2,6 +2,8 @@ import { normalizeThreadList, threadsContextForPrompt } from "@/lib/threads";
 import { clampVocabLevel, levelPromptBlock } from "@/lib/vocabLevels";
 import type {
   DeepDiveResult,
+  FeelingNameCandidate,
+  FeelingNameResult,
   LexiconWord,
   MetaphorGridItem,
   MetaphorGridResponse,
@@ -583,4 +585,99 @@ export async function deepDiveWord(word: string, onCore?: (core: DeepDiveResult)
   ]);
 
   return normalizeDeepDiveResult({ ...core, ...extras });
+}
+
+const NAME_FEELING_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a lexicographer of inner life: you find the exact English lemma for a feeling as it actually happened, not a prettier synonym of the word they reached for.
+
+Return ONLY valid JSON matching this shape:
+{
+  "vague_label": "the imprecise word or short phrase they reached for (e.g. disappointment)",
+  "why_not_that": "one or two sentences: what their vague label names, and why it misses THIS situation",
+  "primary": {
+    "word": "lowercase lemma they should actually use",
+    "pronunciation": "IPA in slashes like /ʃəˈɡrɪn/",
+    "part_of_speech": "noun|adjective|verb|etc",
+    "definition": "one concise line (max ~22 words)",
+    "origin": "etymology, concise",
+    "why": "why THIS word captures the situation — the scene, not the category",
+    "rewritten_phrase": "their thought, same voice and roughly the same length, using this word naturally — ready to paste"
+  },
+  "neighbors": [
+    {
+      "word": "lowercase lemma",
+      "pronunciation": "IPA in slashes",
+      "part_of_speech": "noun|adjective|verb|etc",
+      "definition": "one concise line",
+      "origin": "etymology, concise",
+      "why": "when you would pick this instead of the primary — a distinct shade, not a duplicate",
+      "rewritten_phrase": "their thought rewritten with THIS word, same voice"
+    }
+  ]
+}
+
+The bar: name the situation, not the emotion-category. If they said they feel disappointed for starting books and failing to keep the commitment, do not return a synonym of disappointment (let down, saddened, or disheartened as a mere swap). Reach for the word that names the specific sting — e.g. chagrin (embarrassment at failing oneself), akrasia (the will slipping against better judgment), self-reproach (the scolding after). The primary should be the best single fit; neighbors are real alternatives a careful speaker might choose instead.
+
+Hard ban:
+- Lazy synonym swaps with no situational fit (sad → melancholy, angry → irate, happy → joyful, disappointed → disheartened) unless the situation truly is that shade and nothing sharper exists.
+- Motivational-poster language, therapy-speak, and invented or overly technical nonce words a serious reader would never say or write.
+- Returning their own vague label as the primary.
+
+Rules:
+- primary is required; all of its fields are required.
+- neighbors: exactly 2 or 3 items, each a distinct shade of the same situation — not near-duplicates of the primary or of each other.
+- Every word MUST have IPA pronunciation in slashes.
+- rewritten_phrase keeps their voice (contractions, register, first person if they used it). Do not inflate it into an essay; one or two sentences, paste-ready.
+- Prefer one exact English lemma a serious reader would actually say or write. Rare is fine when it is the right word; obscure for its own sake is not.
+- If they described a situation without naming an emotion, infer vague_label from the nearest common word they might have used.
+${JSON_ONLY}`;
+
+function asCandidate(raw: unknown): FeelingNameCandidate | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const word = typeof o.word === "string" ? o.word.trim() : "";
+  if (!word) return null;
+  return {
+    word,
+    pronunciation: typeof o.pronunciation === "string" ? o.pronunciation : "",
+    part_of_speech: typeof o.part_of_speech === "string" ? o.part_of_speech : "",
+    definition: typeof o.definition === "string" ? o.definition : "",
+    origin: typeof o.origin === "string" ? o.origin : "",
+    why: typeof o.why === "string" ? o.why : "",
+    rewritten_phrase: typeof o.rewritten_phrase === "string" ? o.rewritten_phrase : "",
+  };
+}
+
+/**
+ * Find the precise lemma (and a paste-ready rewrite) for a feeling described in the user's own words.
+ */
+export async function nameFeeling(text: string): Promise<FeelingNameResult> {
+  const trimmed = text.trim();
+  const raw = await chatJson<FeelingNameResult>(
+    NAME_FEELING_SYSTEM,
+    `They wrote:\n\n${trimmed}`,
+    1536,
+    0.35
+  );
+
+  const primary = asCandidate(raw.primary);
+  if (!primary) throw new Error("Could not name that feeling — try a little more of the scene.");
+
+  const seen = new Set([primary.word.toLowerCase()]);
+  const neighbors: FeelingNameCandidate[] = [];
+  for (const n of Array.isArray(raw.neighbors) ? raw.neighbors : []) {
+    const c = asCandidate(n);
+    if (!c) continue;
+    const k = c.word.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    neighbors.push(c);
+    if (neighbors.length >= 3) break;
+  }
+
+  return {
+    vague_label: typeof raw.vague_label === "string" && raw.vague_label.trim() ? raw.vague_label.trim() : "that feeling",
+    why_not_that: typeof raw.why_not_that === "string" ? raw.why_not_that : "",
+    primary,
+    neighbors,
+  };
 }

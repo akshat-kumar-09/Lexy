@@ -22,7 +22,7 @@ const libre = Libre_Baskerville({
 
 export const metadata: Metadata = {
   title: "Lexy — your wardrobe for words",
-  description: `Lexy (lexicon) learns your taste every time you rate a word. Deep Dive, Metaphors, and Morning Scribble — favourites from ${FAVOURITE_THRESHOLD} up live in your lexicon.`,
+  description: `Lexy (lexicon) learns your taste every time you rate a word. Deep Dive, Metaphors, Morning Scribble, and Articulate — favourites from ${FAVOURITE_THRESHOLD} up live in your lexicon.`,
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
