@@ -1,9 +1,12 @@
+import type { VocabLevel } from "@/lib/vocabLevels";
+
 export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily";
 
 export interface LexiconWord {
   word: string;
   pronunciation: string;
   part_of_speech: string;
+  /** Primary gloss — Lexy's easy-to-retain meaning when available. */
   definition: string;
   example: string;
   origin: string;
@@ -12,6 +15,15 @@ export interface LexiconWord {
   source: WordSource;
   /** The user's own sentence using this word — written at add-time, kept with the word for good. */
   user_sentence?: string;
+  /** Renowned dictionary-style definition (e.g. Oxford). */
+  reference_definition?: string;
+  reference_source?: string;
+  /** Lexy's memorable gloss — same as definition when saved from Deep Dive. */
+  lexy_definition?: string;
+  /** Where the IPA comes from (e.g. Cambridge). */
+  pronunciation_source?: string;
+  /** 1 = everyone knows … 5 = rare. Deep Dive words are usually 3–5. */
+  level?: VocabLevel;
 }
 
 /** One cell in the daily metaphor grid (12 at a time). */
@@ -85,8 +97,18 @@ export interface RelatedFormDefinition {
 export interface DeepDiveResult {
   word: string;
   pronunciation: string;
+  /** Renowned reference for the IPA (e.g. Oxford English Dictionary). */
+  pronunciation_source: string;
   part_of_speech: string;
-  definition: string;
+  /** Precise dictionary-style definition — Oxford or equivalent. */
+  reference_definition: string;
+  reference_source: string;
+  /** Lexy's gloss: shorter, vivid, easy to retain. */
+  lexy_definition: string;
+  /** @deprecated use reference_definition — kept for older API responses */
+  definition?: string;
+  /** 1 = everyone knows … 5 = rare. */
+  level: VocabLevel;
   nuance: string;
   example_sentences: string[];
   /** Casual, ready-to-say one-liners for actual conversation — not literary/written examples. */
@@ -98,13 +120,15 @@ export interface DeepDiveResult {
   related_form_definitions?: RelatedFormDefinition[];
 }
 
-/** One cell in the Deep Dive taste grid — 25 at a time, refreshed as taste updates. */
+/** One cell in the Deep Dive taste grid — 25 at a time until the user requests a new batch. */
 export interface TasteGridWord {
   word: string;
   pronunciation: string;
   part_of_speech: string;
   definition: string;
   why_for_you: string;
+  /** 1 = everyone knows … 5 = rare. */
+  level: VocabLevel;
   /** Which exploration theme this best fits — only populated when more than 2 threads are active. */
   theme?: string;
 }
