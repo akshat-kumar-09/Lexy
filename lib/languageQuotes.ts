@@ -11,7 +11,7 @@ export const ESSENCE_BY_PATH: Record<string, string> = {
   "/metaphors":
     "Metaphor is how the mind makes bridges — good language lets you see one thing through the lens of another, truly.",
   "/articulate":
-    "To name an experience is to gain power over it — tone, body, and breath are part of the sentence, and clarity is a thing you can practice.",
+    "Describe a feeling in your own words and take the exact one — naming it is how you gain power over it, and tone, body, and breath are part of the sentence.",
   "/lexicon":
     "A lexicon you curate is a portrait of your mind: what you keep close is what you are willing to see clearly.",
   "/scribble":
