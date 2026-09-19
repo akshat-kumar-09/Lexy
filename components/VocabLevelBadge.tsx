@@ -7,14 +7,14 @@ import { VOCAB_LEVELS, clampVocabLevel, type VocabLevel } from "@/lib/vocabLevel
 const STROKE_HEIGHTS = [0.42, 0.58, 0.72, 0.86, 1] as const;
 
 const LEVEL_INK: Record<VocabLevel, { filled: string; label: string }> = {
-  1: { filled: "#C4BAAB", label: "text-[#8B8377]" },
-  2: { filled: "#AE9F88", label: "text-[#7A7268]" },
+  1: { filled: "#AFA492", label: "text-[#8B8377]" },
+  2: { filled: "#9A8869", label: "text-[#7A7268]" },
   3: { filled: "#8B7355", label: "text-[#8B7355]" },
-  4: { filled: "#6B5A45", label: "text-[#5E5243]" },
+  4: { filled: "#63523D", label: "text-[#5E5243]" },
   5: { filled: "#1C1917", label: "text-[#1C1917]" },
 };
 
-const EMPTY_STROKE = "#E4DCCE";
+const EMPTY_STROKE = "#DFD6C6";
 
 function TierMark({ level, size = 13 }: { level: VocabLevel; size?: number }) {
   const gap = size * 0.19;
@@ -67,7 +67,7 @@ export function VocabLevelBadge({ level: raw, compact, className = "" }: Props) 
         title={title}
         aria-label={`${meta.label}, ${meta.tagline}`}
       >
-        <TierMark level={level} size={12} />
+        <TierMark level={level} size={13} />
       </span>
     );
   }

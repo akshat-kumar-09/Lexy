@@ -97,17 +97,26 @@ const INK = "#1C1917";
 const BODY = "#3F3933";
 const MUTED = "#6A6360";
 const GOLD = "#8B7355";
-const FAINT = "#B0A898";
+const FAINT = "#A99F92";
 const RULE = "#E8DFD0";
+
+/** Baseline sits this far below a text block's top edge — leaves even leading above the caps. */
+const ASCENT_RATIO = 0.72;
+const LABEL_CAP_HEIGHT = 14;
 
 const TIER_STROKE_HEIGHTS = [0.42, 0.58, 0.72, 0.86, 1] as const;
 const TIER_FILL: Record<VocabLevel, string> = {
-  1: "#C4BAAB",
-  2: "#AE9F88",
+  1: "#AFA492",
+  2: "#9A8869",
   3: "#8B7355",
-  4: "#6B5A45",
+  4: "#63523D",
   5: "#1C1917",
 };
+const TIER_EMPTY = "#DFD6C6";
+const TIER_SIZE = 22;
+const TIER_STROKE = 3.4;
+const TIER_GAP = 4.2;
+const TIER_WIDTH = TIER_STROKE * 5 + TIER_GAP * 4;
 
 function cssFont(variable: string, fallback: string): string {
   if (typeof window === "undefined") return fallback;
@@ -117,25 +126,31 @@ function cssFont(variable: string, fallback: string): string {
 
 type Fonts = { serif: string; sans: string };
 
+type TextBlock = {
+  kind: "text";
+  lines: string[];
+  font: string;
+  lineHeight: number;
+  color: string;
+  gapBefore: number;
+  /** Gold hairline down the left, for the quoted sentence. */
+  quoted?: boolean;
+};
+
 type Block =
+  | TextBlock
   | { kind: "label"; text: string; color: string; gapBefore: number }
-  | { kind: "lines"; lines: string[]; font: string; lineHeight: number; color: string; gapBefore: number }
-  | { kind: "quote"; lines: string[]; font: string; lineHeight: number; gapBefore: number }
   | { kind: "rule"; gapBefore: number };
 
-function blockHeight(b: Block): number {
-  switch (b.kind) {
-    case "label":
-      return 20;
-    case "lines":
-    case "quote":
-      return b.lines.length * b.lineHeight;
-    case "rule":
-      return 1;
-  }
-}
+type Plan = {
+  wordFont: string;
+  wordSize: number;
+  wordLines: string[];
+  pronunciationLines: string[];
+  blocks: Block[];
+};
 
-function layout(ctx: CanvasRenderingContext2D, c: ShareWordCard, fonts: Fonts) {
+function plan(ctx: CanvasRenderingContext2D, c: ShareWordCard, fonts: Fonts): Plan {
   const measureWith = (font: string) => (s: string) => {
     ctx.font = font;
     return ctx.measureText(s).width;
@@ -146,84 +161,97 @@ function layout(ctx: CanvasRenderingContext2D, c: ShareWordCard, fonts: Fonts) {
     return ctx.measureText(c.word).width;
   });
   const wordFont = `700 ${wordSize}px ${fonts.serif}`;
-  const wordLines = wrapText(c.word, CONTENT_WIDTH, measureWith(wordFont));
 
+  const pronunciationFont = `italic 400 34px ${fonts.serif}`;
   const blocks: Block[] = [];
 
-  if (c.reference_definition) {
-    const font = `400 32px ${fonts.sans}`;
-    if (c.reference_source) {
-      blocks.push({ kind: "label", text: c.reference_source, color: GOLD, gapBefore: 56 });
-      blocks.push({
-        kind: "lines",
-        lines: wrapText(c.reference_definition, CONTENT_WIDTH, measureWith(font)),
-        font,
-        lineHeight: 48,
-        color: BODY,
-        gapBefore: 20,
-      });
-    } else {
-      blocks.push({
-        kind: "lines",
-        lines: wrapText(c.reference_definition, CONTENT_WIDTH, measureWith(font)),
-        font,
-        lineHeight: 48,
-        color: BODY,
-        gapBefore: 56,
-      });
-    }
-  }
-
-  if (c.plain_meaning) {
-    const font = `400 34px ${fonts.serif}`;
-    blocks.push({ kind: "label", text: "In plain words", color: FAINT, gapBefore: 48 });
+  const pushSection = (
+    label: string,
+    text: string,
+    font: string,
+    lineHeight: number,
+    color: string,
+    labelColor: string
+  ) => {
+    if (!text) return;
+    if (label) blocks.push({ kind: "label", text: label, color: labelColor, gapBefore: blocks.length ? 46 : 54 });
     blocks.push({
-      kind: "lines",
-      lines: wrapText(c.plain_meaning, CONTENT_WIDTH, measureWith(font)),
+      kind: "text",
+      lines: wrapText(text, CONTENT_WIDTH, measureWith(font)),
       font,
-      lineHeight: 52,
-      color: INK,
-      gapBefore: 20,
+      lineHeight,
+      color,
+      gapBefore: label ? 12 : blocks.length ? 46 : 54,
     });
-  }
+  };
 
-  if (c.nuance) {
-    const font = `400 30px ${fonts.sans}`;
-    blocks.push({ kind: "label", text: "The nuance", color: FAINT, gapBefore: 48 });
-    blocks.push({
-      kind: "lines",
-      lines: wrapText(c.nuance, CONTENT_WIDTH, measureWith(font)),
-      font,
-      lineHeight: 46,
-      color: MUTED,
-      gapBefore: 20,
-    });
-  }
+  pushSection(
+    c.reference_source,
+    c.reference_definition,
+    `400 32px ${fonts.sans}`,
+    48,
+    BODY,
+    GOLD
+  );
+  pushSection("In plain words", c.plain_meaning, `400 34px ${fonts.serif}`, 52, INK, FAINT);
+  pushSection("The nuance", c.nuance, `400 30px ${fonts.sans}`, 46, MUTED, FAINT);
 
   if (c.example) {
     const font = `italic 400 32px ${fonts.serif}`;
     blocks.push({ kind: "rule", gapBefore: 54 });
     blocks.push({
-      kind: "quote",
-      lines: wrapText(`“${c.example}”`, CONTENT_WIDTH - 34, measureWith(font)),
+      kind: "text",
+      lines: wrapText(`“${c.example}”`, CONTENT_WIDTH - 40, measureWith(font)),
       font,
       lineHeight: 50,
+      color: GOLD,
       gapBefore: 44,
+      quoted: true,
     });
   }
 
-  const headerHeight = 30 + 36 + wordLines.length * (wordSize * 1.08) + (c.pronunciation ? 52 : 0);
-  const bodyHeight = blocks.reduce((sum, b) => sum + b.gapBefore + blockHeight(b), 0);
-  const height = Math.max(1080, Math.round(PAD * 2 + headerHeight + bodyHeight));
-
-  return { wordFont, wordSize, wordLines, blocks, height };
+  return {
+    wordFont,
+    wordSize,
+    wordLines: wrapText(c.word, CONTENT_WIDTH, measureWith(wordFont)),
+    pronunciationLines: wrapText(c.pronunciation, CONTENT_WIDTH, measureWith(pronunciationFont)),
+    blocks,
+  };
 }
 
-function paintBackground(ctx: CanvasRenderingContext2D, width: number, height: number) {
+function drawTierMark(ctx: CanvasRenderingContext2D, x: number, baseline: number, level: VocabLevel) {
+  TIER_STROKE_HEIGHTS.forEach((ratio, i) => {
+    const h = TIER_SIZE * ratio;
+    ctx.fillStyle = i < level ? TIER_FILL[level] : TIER_EMPTY;
+    ctx.beginPath();
+    ctx.roundRect(x + i * (TIER_STROKE + TIER_GAP), baseline - h, TIER_STROKE, h, TIER_STROKE / 2);
+    ctx.fill();
+  });
+}
+
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  baseline: number,
+  color: string,
+  font: string,
+  align: CanvasTextAlign = "left"
+) {
+  ctx.save();
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  if ("letterSpacing" in ctx) ctx.letterSpacing = "2.4px";
+  ctx.fillText(text.toUpperCase(), x, baseline);
+  ctx.restore();
+}
+
+function drawFrame(ctx: CanvasRenderingContext2D, width: number, height: number) {
   ctx.fillStyle = PARCHMENT;
   ctx.fillRect(0, 0, width, height);
 
-  const warm = ctx.createRadialGradient(width * 0.12, height * 0.06, 0, width * 0.12, height * 0.06, width * 0.9);
+  const warm = ctx.createRadialGradient(width * 0.12, height * 0.05, 0, width * 0.12, height * 0.05, width);
   warm.addColorStop(0, "rgba(139, 115, 85, 0.07)");
   warm.addColorStop(1, "rgba(139, 115, 85, 0)");
   ctx.fillStyle = warm;
@@ -252,28 +280,116 @@ function paintBackground(ctx: CanvasRenderingContext2D, width: number, height: n
   }
 }
 
-function paintTierMark(ctx: CanvasRenderingContext2D, x: number, baseline: number, level: VocabLevel) {
-  const size = 22;
-  const stroke = 3.4;
-  const gap = 4.2;
-  ctx.fillStyle = TIER_FILL[level];
-  TIER_STROKE_HEIGHTS.forEach((ratio, i) => {
-    const h = size * ratio;
-    ctx.fillStyle = i < level ? TIER_FILL[level] : "#E4DCCE";
-    ctx.beginPath();
-    ctx.roundRect(x + i * (stroke + gap), baseline - h, stroke, h, stroke / 2);
-    ctx.fill();
-  });
-  return 5 * stroke + 4 * gap;
-}
+/**
+ * One pass both measures and paints, so the canvas is exactly as tall as the words need —
+ * no clipped nuance, no lake of empty parchment under the quote.
+ */
+function renderPass(
+  ctx: CanvasRenderingContext2D,
+  c: ShareWordCard,
+  p: Plan,
+  fonts: Fonts,
+  paint: boolean
+): number {
+  let y = PAD;
 
-function paintLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, font: string) {
-  ctx.save();
-  ctx.font = font;
-  ctx.fillStyle = color;
-  if ("letterSpacing" in ctx) ctx.letterSpacing = "2.4px";
-  ctx.fillText(text.toUpperCase(), x, y);
-  ctx.restore();
+  const tierBaseline = y + TIER_SIZE;
+  if (paint) {
+    drawTierMark(ctx, PAD, tierBaseline, c.level);
+    drawLabel(
+      ctx,
+      VOCAB_LEVELS[c.level].tagline,
+      PAD + TIER_WIDTH + 14,
+      tierBaseline - 3,
+      GOLD,
+      `600 20px ${fonts.sans}`
+    );
+    if (c.part_of_speech) {
+      drawLabel(
+        ctx,
+        c.part_of_speech,
+        CARD_WIDTH - PAD,
+        tierBaseline - 3,
+        FAINT,
+        `600 20px ${fonts.sans}`,
+        "right"
+      );
+    }
+  }
+  y = tierBaseline + 30;
+
+  if (paint) {
+    ctx.font = p.wordFont;
+    ctx.fillStyle = INK;
+  }
+  for (const line of p.wordLines) {
+    const baseline = y + p.wordSize * 0.76;
+    if (paint) {
+      ctx.font = p.wordFont;
+      ctx.fillStyle = INK;
+      ctx.fillText(line, PAD, baseline);
+    }
+    y = baseline + p.wordSize * 0.2;
+  }
+
+  if (p.pronunciationLines.length) {
+    y += 14;
+    for (const line of p.pronunciationLines) {
+      const baseline = y + 26;
+      if (paint) {
+        ctx.font = `italic 400 34px ${fonts.serif}`;
+        ctx.fillStyle = GOLD;
+        ctx.fillText(line, PAD, baseline);
+      }
+      y = baseline + 10;
+    }
+  }
+
+  for (const block of p.blocks) {
+    y += block.gapBefore;
+
+    if (block.kind === "label") {
+      const baseline = y + LABEL_CAP_HEIGHT;
+      if (paint) drawLabel(ctx, block.text, PAD, baseline, block.color, `600 19px ${fonts.sans}`);
+      y = baseline + 2;
+      continue;
+    }
+
+    if (block.kind === "rule") {
+      if (paint) {
+        ctx.strokeStyle = RULE;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(PAD, y + 0.5);
+        ctx.lineTo(CARD_WIDTH - PAD, y + 0.5);
+        ctx.stroke();
+      }
+      y += 1;
+      continue;
+    }
+
+    const top = y;
+    const height = block.lines.length * block.lineHeight;
+    const x = block.quoted ? PAD + 36 : PAD;
+
+    if (paint) {
+      if (block.quoted) {
+        ctx.fillStyle = "#DFD3BE";
+        ctx.beginPath();
+        ctx.roundRect(PAD, top + 6, 3, height - 12, 1.5);
+        ctx.fill();
+      }
+      ctx.font = block.font;
+      ctx.fillStyle = block.color;
+      block.lines.forEach((line, i) => {
+        ctx.fillText(line, x, top + block.lineHeight * ASCENT_RATIO + i * block.lineHeight);
+      });
+    }
+
+    y = top + height;
+  }
+
+  return Math.round(y + PAD);
 }
 
 /** Renders the word page as a standalone image. Browser only — needs canvas and loaded fonts. */
@@ -287,87 +403,20 @@ export async function renderWordCard(c: ShareWordCard): Promise<Blob> {
 
   if (document.fonts?.ready) await document.fonts.ready;
 
-  const probe = document.createElement("canvas");
-  const probeCtx = probe.getContext("2d");
-  if (!probeCtx) throw new Error("Could not prepare the card");
-  const plan = layout(probeCtx, c, fonts);
-
   const canvas = document.createElement("canvas");
   canvas.width = CARD_WIDTH;
-  canvas.height = plan.height;
+  canvas.height = 10;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not draw the card");
-
   ctx.textBaseline = "alphabetic";
-  paintBackground(ctx, CARD_WIDTH, plan.height);
 
-  let y = PAD + 22;
+  const layout = plan(ctx, c, fonts);
+  const height = renderPass(ctx, c, layout, fonts, false);
 
-  const tierLabel = VOCAB_LEVELS[c.level].tagline;
-  const markWidth = paintTierMark(ctx, PAD, y, c.level);
-  paintLabel(ctx, tierLabel, PAD + markWidth + 14, y - 3, GOLD, `600 20px ${fonts.sans}`);
-  if (c.part_of_speech) {
-    ctx.save();
-    ctx.font = `600 20px ${fonts.sans}`;
-    ctx.fillStyle = FAINT;
-    if ("letterSpacing" in ctx) ctx.letterSpacing = "2.4px";
-    ctx.textAlign = "right";
-    ctx.fillText(c.part_of_speech.toUpperCase(), CARD_WIDTH - PAD, y - 3);
-    ctx.restore();
-  }
-
-  y += 40;
-  ctx.font = plan.wordFont;
-  ctx.fillStyle = INK;
-  for (const line of plan.wordLines) {
-    y += plan.wordSize * 0.86;
-    ctx.fillText(line, PAD, y);
-    y += plan.wordSize * 0.22;
-  }
-
-  if (c.pronunciation) {
-    y += 34;
-    ctx.font = `italic 400 34px ${fonts.serif}`;
-    ctx.fillStyle = GOLD;
-    ctx.fillText(c.pronunciation, PAD, y);
-    y += 8;
-  }
-
-  for (const block of plan.blocks) {
-    y += block.gapBefore;
-    if (block.kind === "label") {
-      paintLabel(ctx, block.text, PAD, y, block.color, `600 19px ${fonts.sans}`);
-      y += 2;
-      continue;
-    }
-    if (block.kind === "rule") {
-      ctx.strokeStyle = RULE;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(PAD, y + 0.5);
-      ctx.lineTo(CARD_WIDTH - PAD, y + 0.5);
-      ctx.stroke();
-      continue;
-    }
-
-    const quote = block.kind === "quote";
-    if (quote) {
-      const h = block.lines.length * block.lineHeight;
-      ctx.fillStyle = "#DFD3BE";
-      ctx.beginPath();
-      ctx.roundRect(PAD, y - block.lineHeight * 0.72, 3, h, 1.5);
-      ctx.fill();
-    }
-
-    ctx.font = block.font;
-    ctx.fillStyle = quote ? GOLD : block.color;
-    const x = quote ? PAD + 34 : PAD;
-    for (const line of block.lines) {
-      ctx.fillText(line, x, y);
-      y += block.lineHeight;
-    }
-    y -= block.lineHeight - block.lineHeight * 0.72;
-  }
+  canvas.height = height;
+  ctx.textBaseline = "alphabetic";
+  drawFrame(ctx, CARD_WIDTH, height);
+  renderPass(ctx, c, layout, fonts, true);
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
