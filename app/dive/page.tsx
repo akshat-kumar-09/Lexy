@@ -7,7 +7,8 @@ import { PronounceButton } from "@/components/PronounceButton";
 import { QuickAddRating } from "@/components/QuickAddRating";
 import { RatingDial } from "@/components/RatingDial";
 import { SentenceCapture } from "@/components/SentenceCapture";
-import { VocabLevelBadge } from "@/components/VocabLevelBadge";
+import { ShareWordCard } from "@/components/ShareWordCard";
+import { VocabLevelBadge, VocabTierMark } from "@/components/VocabLevelBadge";
 import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
 import { GRID_LEVEL_TARGETS, VOCAB_LEVELS, WHY_ELEVATED_WORDS } from "@/lib/vocabLevels";
@@ -246,21 +247,28 @@ function DivePageContent() {
         <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{WHY_ELEVATED_WORDS}</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {([3, 4, 5, 2] as const).map((lv) => (
-          <div
-            key={lv}
-            className="flex items-center gap-2 rounded-full border border-[#EDE8E0] bg-white px-3 py-1.5 text-[11px] text-[#6A6360]"
-          >
-            <VocabLevelBadge level={lv} compact />
-            <span>
-              {GRID_LEVEL_TARGETS[lv].min}–{GRID_LEVEL_TARGETS[lv].max} per batch
-            </span>
-          </div>
-        ))}
-        <span className="self-center text-[11px] italic text-[#7A7268]">
-          Level 1 skipped · {VOCAB_LEVELS[3].audience}
-        </span>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {([2, 3, 4, 5] as const).map((lv) => (
+            <div
+              key={lv}
+              className="flex items-center gap-2 rounded-full border border-[#EDE8E0] bg-white py-1.5 pl-2.5 pr-3"
+              title={VOCAB_LEVELS[lv].audience}
+            >
+              <VocabTierMark level={lv} size={12} />
+              <span className="font-serif text-[11px] font-bold italic leading-none text-[#4A4340]">
+                {VOCAB_LEVELS[lv].tagline}
+              </span>
+              <span className="text-[10px] font-medium tabular-nums leading-none text-[#B0A898]">
+                {GRID_LEVEL_TARGETS[lv].min}–{GRID_LEVEL_TARGETS[lv].max}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] italic leading-relaxed text-[#7A7268]">
+          The rising strokes mark how rare a word is — per 25-word batch, everyday words are skipped and{" "}
+          {VOCAB_LEVELS[3].tagline.toLowerCase()}s carry the grid.
+        </p>
       </div>
 
       <GenreStrip compact />
@@ -304,8 +312,10 @@ function DivePageContent() {
                     onClick={() => void openDive(s.word, s)}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
-                    <VocabLevelBadge level={s.level} compact />
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
+                      <VocabLevelBadge level={s.level} compact />
+                    </span>
                     <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
                   </button>
                   <QuickAddRating onAdd={(v) => quickAddFromGrid(s, v)} />
@@ -367,14 +377,17 @@ function DivePageContent() {
                   <div className="pointer-events-none absolute inset-x-0 flex justify-center pt-2 sm:hidden">
                     <div className="h-1 w-10 rounded-full bg-[#D4CCC0]" aria-hidden />
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeDiveDetail}
-                    disabled={loadingDive}
-                    className="relative z-10 ml-auto min-h-10 shrink-0 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.1em] text-[#8B7355] active:bg-[#F5EFE0] disabled:opacity-40 sm:hover:bg-[#F5EFE0]"
-                  >
-                    Close
-                  </button>
+                  <div className="relative z-10 ml-auto flex shrink-0 items-center gap-1">
+                    {result && !loadingDive && <ShareWordCard result={result} />}
+                    <button
+                      type="button"
+                      onClick={closeDiveDetail}
+                      disabled={loadingDive}
+                      className="min-h-10 shrink-0 rounded-full px-3 text-xs font-semibold uppercase tracking-[0.1em] text-[#8B7355] active:bg-[#F5EFE0] disabled:opacity-40 sm:hover:bg-[#F5EFE0]"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
 
                 {loadingDive && (
