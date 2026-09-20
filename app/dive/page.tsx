@@ -8,10 +8,10 @@ import { QuickAddRating } from "@/components/QuickAddRating";
 import { RatingDial } from "@/components/RatingDial";
 import { SentenceCapture } from "@/components/SentenceCapture";
 import { ShareWordCard } from "@/components/ShareWordCard";
-import { VocabLevelBadge, VocabTierMark } from "@/components/VocabLevelBadge";
+import { WordUse } from "@/components/WordUse";
 import { deepDiveWord, generateTasteGrid } from "@/lib/claude";
 import { playLexiconChime } from "@/lib/sound";
-import { GRID_LEVEL_TARGETS, VOCAB_LEVELS, WHY_ELEVATED_WORDS } from "@/lib/vocabLevels";
+import { WHY_ELEVATED_WORDS } from "@/lib/vocabLevels";
 import { useLexicon, useTasteGridBatch, useTasteProfile, todayISODate } from "@/lib/store";
 import type { DeepDiveResult, TasteGridWord } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -235,8 +235,7 @@ function DivePageContent() {
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Word Deep Dive</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
-          Twenty-five words picked for your taste — mostly{" "}
-          <span className="font-semibold not-italic">Level 3</span> conversation upgrades you can slip into normal talk.
+          Twenty-five words picked for your taste — conversation upgrades you can slip into normal talk.
           Work through the batch at your pace; tap <span className="font-semibold not-italic">New batch</span> when
           ready. Each deep dive shows a reference meaning plus a Lexy gloss you can retain.
         </p>
@@ -247,30 +246,6 @@ function DivePageContent() {
         <p className="mt-2 text-sm leading-relaxed text-[#4A4340]">{WHY_ELEVATED_WORDS}</p>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {([2, 3, 4, 5] as const).map((lv) => (
-            <div
-              key={lv}
-              className="flex items-center gap-2 rounded-full border border-[#EDE8E0] bg-white py-1.5 pl-2.5 pr-3"
-              title={VOCAB_LEVELS[lv].audience}
-            >
-              <VocabTierMark level={lv} size={12} />
-              <span className="font-serif text-[11px] font-bold italic leading-none text-[#4A4340]">
-                {VOCAB_LEVELS[lv].tagline}
-              </span>
-              <span className="text-[10px] font-medium tabular-nums leading-none text-[#B0A898]">
-                {GRID_LEVEL_TARGETS[lv].min}–{GRID_LEVEL_TARGETS[lv].max}
-              </span>
-            </div>
-          ))}
-        </div>
-        <p className="text-[11px] italic leading-relaxed text-[#7A7268]">
-          The rising strokes mark how rare a word is — per 25-word batch, everyday words are skipped and{" "}
-          {VOCAB_LEVELS[3].tagline.toLowerCase()}s carry the grid.
-        </p>
-      </div>
-
       <GenreStrip compact />
 
       <section className="space-y-4">
@@ -278,7 +253,7 @@ function DivePageContent() {
           <div>
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#B0A898]">Words for your taste</h2>
             <p className="mt-1 text-xs text-[#8B7355]">
-              25 at a time — mostly Level 3 · stays put until New batch.
+              25 at a time · stays put until New batch.
             </p>
           </div>
           <button
@@ -312,10 +287,7 @@ function DivePageContent() {
                     onClick={() => void openDive(s.word, s)}
                     className="min-w-0 flex-1 text-left"
                   >
-                    <span className="flex items-baseline gap-2">
-                      <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
-                      <VocabLevelBadge level={s.level} compact />
-                    </span>
+                    <span className="font-serif text-lg font-bold leading-snug text-[#1C1917]">{s.word}</span>
                     <IPA className="mt-1 block text-xs">{s.pronunciation}</IPA>
                   </button>
                   <QuickAddRating onAdd={(v) => quickAddFromGrid(s, v)} />
@@ -423,7 +395,6 @@ function DivePageContent() {
                       <h2 className="break-words font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">
                         {result.word}
                       </h2>
-                      <VocabLevelBadge level={result.level} />
                       <PronounceButton word={result.word} />
                     </div>
                     <IPA className="mt-2 block">{result.pronunciation}</IPA>
@@ -431,6 +402,7 @@ function DivePageContent() {
                     <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
                       {result.part_of_speech}
                     </p>
+                    <WordUse className="mt-4 border-t border-[#F5F0EA] pt-4" level={result.level} />
 
                     <div className="mt-4 space-y-4">
                       <div className="rounded-xl border border-[#F0EAE0] bg-[#FBF8F2] p-4">
