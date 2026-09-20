@@ -2,7 +2,6 @@
 
 import { IPA } from "@/components/IPA";
 import { RatingDial } from "@/components/RatingDial";
-import { VocabLevelBadge } from "@/components/VocabLevelBadge";
 import { useLexicon } from "@/lib/store";
 import type { LexiconWord } from "@/lib/types";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
@@ -231,10 +230,7 @@ function WordRow({ w, onRemove }: { w: LexiconWord; onRemove: () => void }) {
         className="min-w-0 flex-1 rounded-xl outline-none ring-[#8B7355]/0 transition hover:bg-[#FDFBF7] focus-visible:ring-4 md:flex md:gap-6 lg:hover:bg-transparent"
       >
         <div className="min-w-[140px] md:min-w-[160px]">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-serif text-lg font-bold text-[#1C1917]">{w.word}</span>
-            {w.level != null && <VocabLevelBadge level={w.level} compact />}
-          </div>
+          <span className="font-serif text-lg font-bold text-[#1C1917]">{w.word}</span>
           <IPA className="mt-0.5 block text-xs">{w.pronunciation}</IPA>
           <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8B7355]">
             Open full page →

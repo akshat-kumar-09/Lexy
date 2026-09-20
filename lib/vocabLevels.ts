@@ -4,32 +4,49 @@ export type VocabLevel = 1 | 2 | 3 | 4 | 5;
 
 export const VOCAB_LEVELS: Record<
   VocabLevel,
-  { label: string; tagline: string; audience: string }
+  {
+    label: string;
+    tagline: string;
+    audience: string;
+    /** How often other people actually use this word — shown on Deep Dive, never as L1–L5. */
+    howOften: string;
+    howOftenDetail: string;
+  }
 > = {
   1: {
     label: "Level 1",
     tagline: "Everyone knows",
     audience: "Basic — the words of daily life (happy, run, good).",
+    howOften: "Almost everyone uses this",
+    howOftenDetail: "Daily speech — the first word most people reach for.",
   },
   2: {
     label: "Level 2",
     tagline: "Everyday",
     audience: "Common educated speech — most adults use these regularly.",
+    howOften: "Used often",
+    howOftenDetail: "Most adults say this in ordinary conversation.",
   },
   3: {
     label: "Level 3",
     tagline: "Conversation upgrade",
     audience: "Subtle precision — drop into normal talk and sound sharper, not showy.",
+    howOften: "Used when people want to be exact",
+    howOftenDetail: "Not rare — just more precise than the first word that comes.",
   },
   4: {
     label: "Level 4",
     tagline: "Literary",
     audience: "Serious readers know these; context usually carries the meaning.",
+    howOften: "Seldom used in talk",
+    howOftenDetail: "More often read than said. Context usually carries the meaning.",
   },
   5: {
     label: "Level 5",
     tagline: "Rare",
     audience: "Uncommon gems — reach for when ordinary words fall short.",
+    howOften: "Rarely used",
+    howOftenDetail: "Few people reach for this — a word for when ordinary ones fall short.",
   },
 };
 
