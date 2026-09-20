@@ -1,3 +1,4 @@
+import { parseModelJson } from "@/lib/parseJson";
 import { normalizeThreadList, threadsContextForPrompt } from "@/lib/threads";
 import { clampVocabLevel, levelPromptBlock } from "@/lib/vocabLevels";
 import type {
@@ -17,14 +18,6 @@ const CHAT = "/api/claude/chat";
 const MODEL = "claude-haiku-4-5";
 
 const JSON_ONLY = "Respond with ONLY the JSON object — no markdown code fences, no commentary before or after.";
-
-function stripCodeFence(raw: string): string {
-  return raw
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```\s*$/i, "")
-    .trim();
-}
 
 async function chatJson<T>(
   system: string,
@@ -65,7 +58,7 @@ async function chatJson<T>(
   const block = data.content?.find((b) => b.type === "text");
   const raw = block?.text;
   if (!raw) throw new Error("Empty response from model");
-  return JSON.parse(stripCodeFence(raw)) as T;
+  return parseModelJson<T>(raw);
 }
 
 export async function readHandwriting(
@@ -290,7 +283,7 @@ Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphor
       ).then((r) => {
         emit(Array.isArray(r.suggestions) ? r.suggestions : []);
         return r;
-      })
+      }).catch(() => ({ suggestions: [] as MetaphorGridItem[] }))
     )
   );
 
@@ -308,7 +301,7 @@ Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphor
       `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
       2048,
       0.8
-    );
+    ).catch(() => ({ suggestions: [] as MetaphorGridItem[] }));
     emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
     for (const s of fill.suggestions ?? []) {
       if (suggestions.length >= 12) break;
@@ -457,12 +450,12 @@ ${threadBlock}`;
         `${baseUser}
 
 Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — one fifth of a 25-word taste grid (four other completions supply the rest, in parallel). Bias toward a distinct semantic corner so batches rarely overlap.`,
-        640,
+        1536,
         0.75
       ).then((r) => {
         emit(Array.isArray(r.suggestions) ? r.suggestions : []);
         return r;
-      })
+      }).catch(() => ({ suggestions: [] as TasteGridWord[] }))
     )
   );
 
@@ -482,7 +475,7 @@ Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — o
       `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${threadBlock}`,
       2560,
       0.7
-    );
+    ).catch(() => ({ suggestions: [] as TasteGridWord[] }));
     emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
     for (const s of fill.suggestions ?? []) {
       if (filtered.length >= 25) break;
