@@ -12,6 +12,8 @@ export const ESSENCE_BY_PATH: Record<string, string> = {
     "Metaphor is how the mind makes bridges — good language lets you see one thing through the lens of another, truly.",
   "/articulate":
     "Describe a feeling in your own words and take the exact one — naming it is how you gain power over it, and tone, body, and breath are part of the sentence.",
+  "/sharpen":
+    "“The difference between the almost right word and the right word is really a large matter — ’tis the difference between the lightning-bug and the lightning.” — Mark Twain",
   "/lexicon":
     "A lexicon you curate is a portrait of your mind: what you keep close is what you are willing to see clearly.",
   "/scribble":

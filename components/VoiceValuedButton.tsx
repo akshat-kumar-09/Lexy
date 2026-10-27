@@ -38,7 +38,7 @@ export function VoiceValuedButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-[max(5.75rem,calc(5.25rem+env(safe-area-inset-bottom)))] right-3 z-[35] flex max-w-[min(calc(100vw-1.5rem),14rem)] items-center justify-center rounded-full border border-[#8B7355]/35 bg-gradient-to-br from-[#F5EFE0] via-white to-[#EDE8E0] px-3 py-2.5 text-center shadow-[0_4px_24px_rgba(28,25,23,0.12)] backdrop-blur-sm transition hover:border-[#8B7355]/55 hover:shadow-[0_6px_28px_rgba(139,115,85,0.2)] active:scale-[0.98] md:bottom-6 md:right-6 md:max-w-none md:px-5 md:py-3"
+        className="fixed bottom-[max(1rem,calc(0.75rem+env(safe-area-inset-bottom)))] right-3 z-[35] flex max-w-[min(calc(100vw-1.5rem),14rem)] items-center justify-center rounded-full border border-[#8B7355]/35 bg-gradient-to-br from-[#F5EFE0] via-white to-[#EDE8E0] px-3 py-2.5 text-center shadow-[0_4px_24px_rgba(28,25,23,0.12)] backdrop-blur-sm transition hover:border-[#8B7355]/55 hover:shadow-[0_6px_28px_rgba(139,115,85,0.2)] active:scale-[0.98] md:bottom-6 md:right-6 md:max-w-none md:px-5 md:py-3"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={`${id}-feedback-dialog`}

@@ -8,7 +8,7 @@ import { SentenceCapture } from "@/components/SentenceCapture";
 import { nameFeeling } from "@/lib/claude";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 import { playLexiconChime } from "@/lib/sound";
-import { todayISODate, useLexicon } from "@/lib/store";
+import { todayISODate, useLexicon, useOrbUsage } from "@/lib/store";
 import type { FeelingNameCandidate, FeelingNameResult } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
@@ -38,6 +38,7 @@ export function FeelingFinder() {
   const [copied, setCopied] = useState(false);
   const [burst, setBurst] = useState(false);
   const [savedKey, setSavedKey] = useState<string | null>(null);
+  const recordVisit = useOrbUsage((s) => s.recordVisit);
 
   const options = useMemo(() => (result ? candidatesOf(result) : []), [result]);
   const selected = options.find((c) => c.word.toLowerCase() === selectedKey) ?? options[0] ?? null;
@@ -51,6 +52,7 @@ export function FeelingFinder() {
     setCopied(false);
     setBurst(false);
     setSavedKey(null);
+    recordVisit("feeling");
     try {
       const r = await nameFeeling(text);
       setResult(r);
@@ -63,7 +65,7 @@ export function FeelingFinder() {
     } finally {
       setLoading(false);
     }
-  }, [draft, loading]);
+  }, [draft, loading, recordVisit]);
 
   function reset() {
     setResult(null);
@@ -108,7 +110,7 @@ export function FeelingFinder() {
   }
 
   return (
-    <section className="space-y-4">
+    <section id="feeling" className="scroll-mt-20 space-y-4">
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8B7355]">Name this feeling</p>
         <h2 className="mt-1 font-serif text-lg font-bold text-[#1C1917] sm:text-xl">Say it in your own words.</h2>

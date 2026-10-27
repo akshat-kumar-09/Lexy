@@ -9,6 +9,10 @@ import type {
   MetaphorGridItem,
   MetaphorGridResponse,
   ScribbleAnalysis,
+  SharpenResult,
+  SharpenSwap,
+  SharpenVersion,
+  SharpenWord,
   TasteGridResponse,
   TasteGridWord,
 } from "@/lib/types";
@@ -673,4 +677,127 @@ export async function nameFeeling(text: string): Promise<FeelingNameResult> {
     primary,
     neighbors,
   };
+}
+
+const SHARPEN_SYSTEM = `You are Lexy's sharpening editor — warm, literary, never corporate. Someone hands you their best attempt at a line. They can feel that more exact words exist; they just can't reach them. Sometimes they also tell you what they really mean and the tone they want.
+
+Your job: keep their meaning and their voice, and replace the vague, hedged or generic parts with words that name exactly what they mean.
+
+Return ONLY valid JSON matching this shape:
+{
+  "intent": "what they are actually trying to say, in one plain sentence — so they can check you understood",
+  "vague": [
+    { "phrase": "an exact substring of their line", "why": "what makes it vague, in a few words" }
+  ],
+  "versions": [
+    {
+      "tone": "one or two words naming the register (e.g. Direct, Diplomatic, Vivid, Warm, Formal)",
+      "text": "their whole line, sharpened",
+      "swaps": [
+        { "from": "an exact substring of their line", "to": "the exact substring of text that replaced it", "why": "the precise shade the new words capture" }
+      ]
+    }
+  ],
+  "words": [
+    {
+      "word": "lowercase lemma",
+      "pronunciation": "IPA in slashes",
+      "part_of_speech": "noun|adjective|verb|etc",
+      "definition": "one concise line",
+      "why": "the exact shade it adds over the vague phrase it replaces"
+    }
+  ]
+}
+
+Example — they wrote "the orbs are actually not the best looking", meant "they look cheap; I want them to feel premium", tone Direct:
+- vague: "not the best looking" (a hedge that names no actual flaw), "actually" (filler).
+- versions: Direct "The orbs look cheap — they need to feel premium." · Diplomatic "The orbs feel a little unrefined; they could look far more luxurious." · Vivid "The orbs read as plasticky when they should feel like polished glass."
+- words: unrefined, plasticky, lustrous, lackluster.
+
+The bar:
+- Name the actual quality. "Not the best looking" is a hedge; "cheap", "garish", "lackluster", "unrefined" each name a different flaw — pick the one that is true for their situation, using their note when they give one.
+- Precision over ornament. No thesaurus inflation, purple prose, corporate filler or therapy-speak. A plain exact word beats a rare decorative one.
+- Keep their voice: same person, tense and contractions; similar length (never more than about one and a half times theirs). A line stays a line.
+
+Rules:
+- versions: exactly 3, each a genuinely different register that still fits the situation — not a reshuffle of the same words. The first is your best fit in the tone they asked for (or in their own tone if they asked for none).
+- vague: 1 to 4 items, each phrase copied exactly from their line. If the line is already precise, return [] and keep the versions light-touch.
+- swaps: every "from" is an exact substring of their line; every "to" is an exact substring of that version's text.
+- words: 3 to 5 lemmas used in the versions that are worth adding to a personal vocabulary — skip everyday words (look, want, need).
+- Every word has IPA pronunciation in slashes.
+${JSON_ONLY}`;
+
+export interface SharpenInput {
+  line: string;
+  /** What they really mean — optional. */
+  intent?: string;
+  /** The tone they want — optional; their own if empty. */
+  tone?: string;
+}
+
+const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+
+/** Keep only well-formed parts of a Sharpen reply; the line's own vague phrases must really be in it. */
+export function normalizeSharpenResult(raw: unknown, line: string): SharpenResult {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const lowerLine = line.toLowerCase();
+
+  const vague = (Array.isArray(o.vague) ? o.vague : [])
+    .map((v) => {
+      const r = (v ?? {}) as Record<string, unknown>;
+      return { phrase: str(r.phrase), why: str(r.why) };
+    })
+    .filter((v) => v.phrase && lowerLine.includes(v.phrase.toLowerCase()))
+    .slice(0, 4);
+
+  const versions: SharpenVersion[] = (Array.isArray(o.versions) ? o.versions : [])
+    .map((v) => {
+      const r = (v ?? {}) as Record<string, unknown>;
+      const swaps: SharpenSwap[] = (Array.isArray(r.swaps) ? r.swaps : [])
+        .map((s) => {
+          const w = (s ?? {}) as Record<string, unknown>;
+          return { from: str(w.from), to: str(w.to), why: str(w.why) };
+        })
+        .filter((s) => s.from && s.to);
+      return { tone: str(r.tone) || "Sharper", text: str(r.text), swaps };
+    })
+    .filter((v) => v.text)
+    .slice(0, 3);
+
+  const seen = new Set<string>();
+  const words: SharpenWord[] = [];
+  for (const w of Array.isArray(o.words) ? o.words : []) {
+    const r = (w ?? {}) as Record<string, unknown>;
+    const word = str(r.word);
+    if (!word || seen.has(word.toLowerCase())) continue;
+    seen.add(word.toLowerCase());
+    words.push({
+      word,
+      pronunciation: str(r.pronunciation),
+      part_of_speech: str(r.part_of_speech),
+      definition: str(r.definition),
+      why: str(r.why),
+    });
+    if (words.length >= 5) break;
+  }
+
+  return { intent: str(o.intent), vague, versions, words };
+}
+
+/**
+ * Sharpen: their best attempt at a line → the same thought in exact words, in three registers.
+ */
+export async function sharpenLine(input: SharpenInput): Promise<SharpenResult> {
+  const line = input.line.trim();
+  const intent = input.intent?.trim();
+  const tone = input.tone?.trim();
+  const user = [
+    `Their line:\n"""${line}"""`,
+    `What they really mean: ${intent || "(not given — infer it from the line)"}`,
+    `Tone they want: ${tone || "their own — keep it"}`,
+  ].join("\n\n");
+
+  const result = normalizeSharpenResult(await chatJson<unknown>(SHARPEN_SYSTEM, user, 1800, 0.5), line);
+  if (!result.versions.length) throw new Error("Lexy couldn't sharpen that one — try adding what you mean.");
+  return result;
 }
