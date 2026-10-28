@@ -1,6 +1,6 @@
 "use client";
 
-import { NavAuthSidebar } from "@/components/NavAuth";
+import { NavAuthMobile } from "@/components/NavAuth";
 import { openIntro } from "@/lib/introStorage";
 import {
   ORBS,
@@ -134,23 +134,23 @@ export function OrbHome() {
 
   return (
     <div
-      className="relative flex min-h-[100dvh] flex-col overflow-hidden text-[#F5EFE0]"
-      style={{ background: "radial-gradient(120% 85% at 50% 8%, #221B15 0%, #120F0C 55%, #0A0807 100%)" }}
+      className="relative flex min-h-[100dvh] flex-col overflow-hidden text-[#1C1917]"
+      style={{ background: "radial-gradient(120% 90% at 50% 0%, #FFFDF9 0%, #FBF7EF 55%, #F3ECDF 100%)" }}
       data-no-deep-dive
     >
-      <div aria-hidden className="lexy-grain pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay" />
+      <div aria-hidden className="lexy-paper pointer-events-none absolute inset-0 opacity-[0.05] mix-blend-multiply" />
       <WordSky words={sky} />
 
       <header className="relative z-10 flex items-start justify-between gap-4 px-5 pt-[calc(1rem+env(safe-area-inset-top))] sm:px-8 sm:pt-7">
         <div>
-          <h1 className="font-serif text-[1.6rem] tracking-tight text-[#F5EFE0]">Lexy</h1>
-          <p className="mt-0.5 font-serif text-[13px] italic text-[#8F877D]">your wardrobe for words</p>
+          <h1 className="font-serif text-[1.6rem] font-bold tracking-tight text-[#1C1917]">Lexy</h1>
+          <p className="mt-0.5 font-serif text-[13px] italic text-[#8B7355]">your wardrobe for words</p>
         </div>
-        <div className="flex items-center gap-4 pt-1.5">
-          <NavAuthSidebar />
+        <div className="flex items-center gap-1 sm:gap-2">
+          <NavAuthMobile />
           <Link
             href="/settings"
-            className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#8B7355] hover:text-[#C8BFB0]"
+            className="flex min-h-11 items-center px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#8B7355] hover:text-[#1C1917]"
           >
             Settings
           </Link>
@@ -171,12 +171,12 @@ export function OrbHome() {
       </nav>
 
       <footer className="relative z-10 space-y-1.5 px-5 pb-[calc(4.75rem+env(safe-area-inset-bottom))] pt-3 text-center sm:pb-8">
-        <p className="font-serif text-[14px] italic text-[#A8A098]">Language is the dress of thought.</p>
-        {earlyDays && <p className="text-[11px] text-[#6F675E]">Each orb grows with the ways you use Lexy.</p>}
+        <p className="font-serif text-[15px] italic text-[#8B7355]">Language is the dress of thought.</p>
+        {earlyDays && <p className="text-[11px] text-[#B0A898]">Each orb grows with the ways you use Lexy.</p>}
         {showTour && (
-          <p className="text-[11px] text-[#7D756C]">
+          <p className="text-[11px] text-[#B0A898]">
             New here?{" "}
-            <button type="button" onClick={() => openIntro()} className="font-semibold text-[#B8955E] hover:underline">
+            <button type="button" onClick={() => openIntro()} className="font-semibold text-[#8B7355] hover:underline">
               Take the tour
             </button>
             {" · "}
@@ -247,15 +247,16 @@ function Orb({
           onPointerMove={followLight}
           onPointerLeave={restLight}
           aria-label={`${def.label}: ${orb.line}`}
-          className="lexy-orb relative flex h-full w-full items-center justify-center rounded-full text-center outline-none hover:scale-[1.03] focus-visible:ring-1 focus-visible:ring-[#F5EFE0]/70 focus-visible:ring-offset-[6px] focus-visible:ring-offset-[#0D0B09] active:scale-[0.985]"
+          className="lexy-orb relative flex h-full w-full items-center justify-center rounded-full text-center outline-none hover:scale-[1.03] focus-visible:ring-1 focus-visible:ring-[#8B7355] focus-visible:ring-offset-[6px] focus-visible:ring-offset-[#FBF7EF] active:scale-[0.985]"
           style={{
             background: orbBackground(def),
             color: def.ink,
             boxShadow: [
-              `0 ${px(0.34)}px ${px(0.62)}px -${px(0.2)}px rgba(0,0,0,0.8)`,
-              `0 0 ${px(0.95)}px ${def.glow}`,
-              `inset 0 -${px(0.22)}px ${px(0.46)}px rgba(0,0,0,0.42)`,
-              `inset 0 0 ${px(0.14)}px rgba(255,255,255,0.09)`,
+              `0 ${px(0.3)}px ${px(0.55)}px -${px(0.2)}px rgba(28,25,23,0.38)`,
+              `0 ${px(0.08)}px ${px(0.9)}px ${def.glow}`,
+              `inset 0 -${px(0.22)}px ${px(0.46)}px rgba(0,0,0,0.3)`,
+              `inset 0 0 ${px(0.14)}px rgba(255,255,255,0.12)`,
+              "inset 0 0 0 1px rgba(28,25,23,0.06)",
             ].join(", "),
           }}
         >
@@ -279,8 +280,7 @@ function Orb({
           {orb.fresh && (
             <span
               aria-hidden
-              className="lexy-orb-new pointer-events-none absolute -inset-[5px] rounded-full"
-              style={{ color: def.hi }}
+              className="lexy-orb-new pointer-events-none absolute -inset-[5px] rounded-full text-[#8B7355]"
             />
           )}
         </Link>
@@ -341,12 +341,12 @@ function WordSky({ words }: { words: string[] }) {
         return (
           <span
             key={w}
-            className="absolute whitespace-nowrap font-serif italic text-[#F5EFE0]"
+            className="absolute whitespace-nowrap font-serif italic text-[#8B7355]"
             style={{
               left: `${(h % 1000) / 10}%`,
               top: `${((h >>> 10) % 1000) / 10}%`,
               fontSize: 11 + ((h >>> 20) % 9),
-              opacity: 0.035 + ((h >>> 5) % 7) / 100,
+              opacity: 0.07 + ((h >>> 5) % 8) / 100,
               transform: "translate(-50%, -50%)",
             }}
           >
