@@ -1,6 +1,6 @@
 import type { VocabLevel } from "@/lib/vocabLevels";
 
-export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily" | "articulate";
+export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily" | "articulate" | "sharpen";
 
 export interface LexiconWord {
   word: string;
@@ -162,4 +162,45 @@ export interface FeelingNameResult {
   primary: FeelingNameCandidate;
   /** Distinct alternative shades — 2 or 3. */
   neighbors: FeelingNameCandidate[];
+}
+
+/** One vague phrase in the line they gave Sharpen, copied exactly. */
+export interface SharpenVague {
+  phrase: string;
+  /** What makes it vague — one short line. */
+  why: string;
+}
+
+/** A replacement inside one sharpened version: their words → the exact ones. */
+export interface SharpenSwap {
+  from: string;
+  to: string;
+  why: string;
+}
+
+/** Their line, said exactly — in one register. */
+export interface SharpenVersion {
+  /** One or two words naming the register, e.g. "Direct", "Diplomatic". */
+  tone: string;
+  text: string;
+  swaps: SharpenSwap[];
+}
+
+/** A precise word from the versions, worth keeping. */
+export interface SharpenWord {
+  word: string;
+  pronunciation: string;
+  part_of_speech: string;
+  definition: string;
+  /** The exact shade it adds over the vague phrase it replaced. */
+  why: string;
+}
+
+export interface SharpenResult {
+  /** What they're trying to say, plainly — so they can check Lexy understood. */
+  intent: string;
+  vague: SharpenVague[];
+  /** Best fit first, in the tone they asked for; then two other registers. */
+  versions: SharpenVersion[];
+  words: SharpenWord[];
 }

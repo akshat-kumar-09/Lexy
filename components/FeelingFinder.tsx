@@ -1,14 +1,11 @@
 "use client";
 
-import { AddWordBurst } from "@/components/AddWordBurst";
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
-import { RatingDial } from "@/components/RatingDial";
-import { SentenceCapture } from "@/components/SentenceCapture";
+import { KeepWord } from "@/components/KeepWord";
 import { nameFeeling } from "@/lib/claude";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
-import { playLexiconChime } from "@/lib/sound";
-import { todayISODate, useLexicon } from "@/lib/store";
+import { useOrbUsage } from "@/lib/store";
 import type { FeelingNameCandidate, FeelingNameResult } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
@@ -26,18 +23,14 @@ function candidatesOf(result: FeelingNameResult): FeelingNameCandidate[] {
 }
 
 export function FeelingFinder() {
-  const upsertWord = useLexicon((s) => s.upsertWord);
 
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<FeelingNameResult | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [sentence, setSentence] = useState("");
-  const [rating, setRating] = useState(7.5);
   const [copied, setCopied] = useState(false);
-  const [burst, setBurst] = useState(false);
-  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const recordVisit = useOrbUsage((s) => s.recordVisit);
 
   const options = useMemo(() => (result ? candidatesOf(result) : []), [result]);
   const selected = options.find((c) => c.word.toLowerCase() === selectedKey) ?? options[0] ?? null;
@@ -49,30 +42,23 @@ export function FeelingFinder() {
     setLoading(true);
     setError(null);
     setCopied(false);
-    setBurst(false);
-    setSavedKey(null);
+    recordVisit("feeling");
     try {
       const r = await nameFeeling(text);
       setResult(r);
       setSelectedKey(r.primary.word.toLowerCase());
-      setSentence("");
-      setRating(7.5);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not name that feeling");
       setResult(null);
     } finally {
       setLoading(false);
     }
-  }, [draft, loading]);
+  }, [draft, loading, recordVisit]);
 
   function reset() {
     setResult(null);
     setSelectedKey(null);
-    setSentence("");
-    setRating(7.5);
     setCopied(false);
-    setBurst(false);
-    setSavedKey(null);
     setError(null);
   }
 
@@ -87,28 +73,8 @@ export function FeelingFinder() {
     }
   }
 
-  function addSelected() {
-    if (!selected || !sentence.trim()) return;
-    upsertWord({
-      word: selected.word,
-      pronunciation: selected.pronunciation,
-      part_of_speech: selected.part_of_speech,
-      definition: selected.definition,
-      example: selected.rewritten_phrase,
-      origin: selected.origin,
-      rating,
-      added: todayISODate(),
-      source: "articulate",
-      user_sentence: sentence.trim(),
-    });
-    playLexiconChime();
-    setBurst(true);
-    setSavedKey(selected.word.toLowerCase());
-    setTimeout(() => setBurst(false), 700);
-  }
-
   return (
-    <section className="space-y-4">
+    <section id="feeling" className="scroll-mt-20 space-y-4">
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8B7355]">Name this feeling</p>
         <h2 className="mt-1 font-serif text-lg font-bold text-[#1C1917] sm:text-xl">Say it in your own words.</h2>
@@ -149,8 +115,6 @@ export function FeelingFinder() {
             animate={{ opacity: 1, y: 0 }}
             className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-5 shadow-sm sm:p-6"
           >
-            <AddWordBurst show={burst} />
-
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#8B7355]">Before</p>
             <p className="mt-1 text-sm text-[#B0A898] line-through">{result.vague_label}</p>
 
@@ -210,7 +174,6 @@ export function FeelingFinder() {
                         onClick={() => {
                           setSelectedKey(key);
                           setCopied(false);
-                          if (savedKey !== key) setSentence("");
                         }}
                         className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
                           on
@@ -231,23 +194,22 @@ export function FeelingFinder() {
             )}
 
             <div className="mt-6 border-t border-[#F5F0EA] pt-5">
-              <p className="text-sm italic text-[#8B7355]">
-                Rate it, write it in a sentence, then keep it. {FAVOURITE_THRESHOLD}+ becomes a favourite.
+              <p className="mb-4 text-sm italic text-[#8B7355]">
+                Rate it to keep it — every rating teaches Lexy your taste. {FAVOURITE_THRESHOLD}+ becomes a favourite.
               </p>
-              <div className="mt-4">
-                <SentenceCapture word={selected.word} value={sentence} onChange={setSentence} id="feeling-sentence" />
-              </div>
-              <div className="mt-5">
-                <RatingDial value={rating} onChange={setRating} id="feeling-rating" label="Rating" />
-              </div>
-              <button
-                type="button"
-                onClick={addSelected}
-                disabled={!sentence.trim()}
-                className="mt-4 w-full rounded-full bg-[#1C1917] py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920] disabled:opacity-40"
-              >
-                {savedKey === selected.word.toLowerCase() ? "Saved to my lexicon" : "Add to my lexicon"}
-              </button>
+              <KeepWord
+                key={selected.word}
+                sentenceId="feeling-sentence"
+                base={{
+                  word: selected.word,
+                  pronunciation: selected.pronunciation,
+                  part_of_speech: selected.part_of_speech,
+                  definition: selected.definition,
+                  example: selected.rewritten_phrase,
+                  origin: selected.origin,
+                  source: "articulate",
+                }}
+              />
             </div>
           </motion.div>
         )}

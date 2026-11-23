@@ -1,11 +1,11 @@
 "use client";
 
 import { IPA } from "@/components/IPA";
-import { RatingDial } from "@/components/RatingDial";
+import { RateBar } from "@/components/RateBar";
 import { VocabLevelBadge } from "@/components/VocabLevelBadge";
 import { useLexicon } from "@/lib/store";
 import type { LexiconWord } from "@/lib/types";
-import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
+import { FAVOURITE_THRESHOLD, NOT_FOR_ME_BELOW } from "@/lib/lexyCopy";
 import Link from "next/link";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 
@@ -20,14 +20,15 @@ export default function LexiconPage() {
     return Object.values(words).sort((a, b) => b.rating - a.rating);
   }, [words]);
 
-  const favourites = sorted.filter((w) => w.rating >= FAVOURITE_THRESHOLD);
-  const rest = sorted.filter((w) => w.rating < FAVOURITE_THRESHOLD);
+  const kept = sorted.filter((w) => w.rating >= NOT_FOR_ME_BELOW);
+  const favourites = kept.filter((w) => w.rating >= FAVOURITE_THRESHOLD);
+  const rest = kept.filter((w) => w.rating < FAVOURITE_THRESHOLD);
+  const notForMe = sorted.filter((w) => w.rating < NOT_FOR_ME_BELOW);
 
-  const total = sorted.length;
-  const avg = total ? sorted.reduce((a, w) => a + w.rating, 0) / total : 0;
+  const total = kept.length;
+  const avg = sorted.length ? sorted.reduce((a, w) => a + w.rating, 0) / sorted.length : 0;
 
   const [pick, setPick] = useState<string | null>(null);
-  const [editRating, setEditRating] = useState(5);
 
   useEffect(() => {
     if (sorted.length === 0) {
@@ -35,15 +36,9 @@ export default function LexiconPage() {
       return;
     }
     if (!pick || !words[pick]) {
-      const k = sorted[0].word.toLowerCase();
-      setPick(k);
-      setEditRating(sorted[0].rating);
+      setPick(sorted[0].word.toLowerCase());
     }
   }, [sorted, pick, words]);
-
-  useEffect(() => {
-    if (pick && words[pick]) setEditRating(words[pick].rating);
-  }, [pick, words]);
 
   const selected = pick ? words[pick] : null;
 
@@ -75,15 +70,13 @@ export default function LexiconPage() {
           Your personal library — every word rated, none forgotten. This is where Lexy compounds.
         </p>
         <p className="mt-3 text-xs leading-relaxed text-[#6A6360]">
-          Your lexicon is <strong className="font-medium text-[#4A4340]">saved automatically in this browser</strong>{" "}
-          (same device &amp; browser). After you add Clerk and a database URL in{" "}
-          <code className="rounded bg-[#F5F0EA] px-1 py-0.5 text-[11px]">.env.local</code>, use{" "}
-          <strong className="font-medium text-[#4A4340]">Sign in</strong> in the nav to sync it to your account. You
-          can always download a .txt or .json backup below — keep a copy somewhere safe.
+          Your lexicon is <strong className="font-medium text-[#4A4340]">saved automatically on this device</strong>.{" "}
+          <strong className="font-medium text-[#4A4340]">Sign in</strong> to keep it in sync across your phone and
+          laptop. You can always download a .txt or .json backup below.
         </p>
       </div>
 
-      {total === 0 ? (
+      {sorted.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-[#EDE8E0] bg-white/80 px-8 py-20 text-center">
           <p className="font-serif text-xl text-[#B0A898]">Your lexicon is empty.</p>
           <p className="mt-3 text-sm leading-relaxed text-[#C8C0B8]">
@@ -96,7 +89,7 @@ export default function LexiconPage() {
             <div className="rounded-2xl border border-[#EDE8E0] bg-white px-2 py-4 text-center sm:px-4 sm:py-5">
               <p className="font-serif text-2xl font-bold tabular-nums text-[#1C1917] sm:text-3xl">{total}</p>
               <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#B0A898] sm:text-[10px]">
-                Words
+                Kept
               </p>
             </div>
             <div className="rounded-2xl border border-[#EDE8E0] bg-white px-2 py-4 text-center sm:px-4 sm:py-5">
@@ -108,7 +101,7 @@ export default function LexiconPage() {
             <div className="rounded-2xl border border-[#EDE8E0] bg-white px-2 py-4 text-center sm:px-4 sm:py-5">
               <p className="font-serif text-2xl font-bold tabular-nums text-[#1C1917] sm:text-3xl">{avg.toFixed(1)}</p>
               <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-[#B0A898] sm:text-[10px]">
-                Average
+                Avg rating
               </p>
             </div>
           </div>
@@ -147,7 +140,7 @@ export default function LexiconPage() {
 
           {rest.length > 0 && (
             <section className="space-y-3">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">All words</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#B0A898]">Kept words</h2>
               <div className="divide-y divide-[#F5F0EA] rounded-2xl border border-[#EDE8E0] bg-white lg:grid lg:grid-cols-2 lg:gap-4 lg:divide-y-0 lg:rounded-none lg:border-0 lg:bg-transparent">
                 {rest.map((w) => (
                   <WordRow key={w.word} w={w} onRemove={() => removeWord(w.word)} />
@@ -165,31 +158,23 @@ export default function LexiconPage() {
                 <select
                   className="mt-1 w-full rounded-xl border border-[#EDE8E0] bg-white px-3 py-2.5 text-sm"
                   value={pick ?? ""}
-                  onChange={(e) => {
-                    const k = e.target.value;
-                    setPick(k);
-                    const wd = words[k];
-                    if (wd) setEditRating(wd.rating);
-                  }}
+                  onChange={(e) => setPick(e.target.value)}
                 >
                   {sorted.map((w) => (
                     <option key={w.word} value={w.word.toLowerCase()}>
-                      {w.word}
+                      {w.word} · {w.rating.toFixed(1)}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="flex-1">
-                <RatingDial value={editRating} onChange={setEditRating} id="edit-rating" label="New rating" />
+              <div className="flex-[2]">
+                <RateBar
+                  key={pick ?? ""}
+                  value={selected ? selected.rating : null}
+                  onCommit={(v) => selected && updateRating(selected.word, v)}
+                  label="New rating"
+                />
               </div>
-              <button
-                type="button"
-                disabled={!selected}
-                onClick={() => selected && updateRating(selected.word, editRating)}
-                className="rounded-full bg-[#1C1917] px-8 py-3 text-sm font-semibold text-[#F5EFE0] disabled:opacity-40"
-              >
-                Save
-              </button>
               <button
                 type="button"
                 disabled={!selected}
@@ -208,6 +193,55 @@ export default function LexiconPage() {
               </button>
             </div>
           </section>
+
+          <details className="group rounded-2xl border border-[#EDE8E0] bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-medium text-[#4A4340] [&::-webkit-details-marker]:hidden">
+              <span>
+                All {sorted.length} words you&apos;ve rated
+                {notForMe.length > 0 && <span className="text-[#B0A898]"> · {notForMe.length} not for you</span>}
+              </span>
+              <span className="text-[#8B7355] transition group-open:rotate-180" aria-hidden>
+                ▾
+              </span>
+            </summary>
+            <p className="px-5 text-xs leading-relaxed text-[#B0A898]">
+              Every rating stays on record — it&apos;s how Lexy learns your taste. Words under {NOT_FOR_ME_BELOW} live
+              only here, out of your lists and reviews.
+            </p>
+            <ul className="mt-3 divide-y divide-[#F5F0EA] border-t border-[#F5F0EA]">
+              {sorted.map((w) => {
+                const low = w.rating < NOT_FOR_ME_BELOW;
+                return (
+                  <li key={w.word}>
+                    <Link
+                      href={`/dive?word=${encodeURIComponent(w.word)}`}
+                      className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm transition hover:bg-[#FDFBF7]"
+                    >
+                      <span className={`min-w-0 truncate font-serif ${low ? "text-[#8A8178]" : "text-[#1C1917]"}`}>
+                        {w.word}
+                        {low && (
+                          <span className="ml-2 font-sans text-[10px] uppercase tracking-[0.1em] text-[#B0A898]">
+                            not for me
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={`shrink-0 tabular-nums ${
+                          w.rating >= FAVOURITE_THRESHOLD
+                            ? "font-semibold text-[#1C7A40]"
+                            : low
+                              ? "text-[#B0A898]"
+                              : "text-[#1C1917]"
+                        }`}
+                      >
+                        {w.rating.toFixed(1)}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
         </>
       )}
     </div>

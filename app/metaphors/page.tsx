@@ -1,12 +1,8 @@
 "use client";
 
-import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
-import { QuickAddRating } from "@/components/QuickAddRating";
-import { RatingDial } from "@/components/RatingDial";
-import { SentenceCapture } from "@/components/SentenceCapture";
+import { KeepWord } from "@/components/KeepWord";
 import { generateMetaphorGrid } from "@/lib/claude";
-import { playLexiconChime } from "@/lib/sound";
 import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
 import type { MetaphorGridItem } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,7 +14,7 @@ export default function MetaphorsPage() {
   const explorationThreads = useTasteProfile((s) => s.threads);
   const metaphor_history = useLexicon((s) => s.metaphor_history);
   const appendMetaphor = useLexicon((s) => s.appendMetaphor);
-  const upsertWord = useLexicon((s) => s.upsertWord);
+  const lexicon = useLexicon((s) => s.words);
 
   const today = todayISODate();
   const todays = useMemo(
@@ -30,9 +26,6 @@ export default function MetaphorsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<MetaphorGridItem | null>(null);
-  const [rating, setRating] = useState(8);
-  const [userSentence, setUserSentence] = useState("");
-  const [burst, setBurst] = useState(false);
 
   useEffect(() => {
     const existing = useLexicon.getState().metaphor_history.find((h) => h.date === today);
@@ -81,59 +74,12 @@ export default function MetaphorsPage() {
 
   function openDetail(m: MetaphorGridItem) {
     setSelected(m);
-    const saved = useLexicon.getState().words[m.metaphor.toLowerCase()];
-    setRating(saved?.rating ?? 8);
-    setUserSentence(saved?.user_sentence ?? "");
-  }
-
-  function addToLexicon(m: MetaphorGridItem) {
-    const sentence = userSentence.trim();
-    if (!sentence) return;
-    const def = [m.unpacking, m.image_strength].filter(Boolean).join("\n\n");
-    const examples = m.example_sentences ?? [];
-    upsertWord({
-      word: m.metaphor,
-      pronunciation: "—",
-      part_of_speech: "metaphor",
-      definition: def || m.unpacking,
-      example: examples[0] ?? "",
-      origin: m.image_strength ?? "—",
-      rating,
-      added: today,
-      source: "metaphor",
-      user_sentence: sentence,
-    });
-    playLexiconChime();
-    setBurst(true);
-    setTimeout(() => setBurst(false), 700);
-    setSelected(null);
-    setUserSentence("");
-  }
-
-  /** Rate straight from the grid card — no detail page, no sentence required. */
-  function quickAddMetaphor(m: MetaphorGridItem, ratingValue: number) {
-    const def = [m.unpacking, m.image_strength].filter(Boolean).join("\n\n");
-    upsertWord({
-      word: m.metaphor,
-      pronunciation: "—",
-      part_of_speech: "metaphor",
-      definition: def || m.unpacking,
-      example: "",
-      origin: "",
-      rating: ratingValue,
-      added: today,
-      source: "metaphor",
-    });
-    playLexiconChime();
-    setBurst(true);
-    setTimeout(() => setBurst(false), 700);
   }
 
   const list = todays?.suggestions ?? [];
 
   function closeMetaphorDetail() {
     setSelected(null);
-    setUserSentence("");
   }
 
   const metaphorDetailOpen = Boolean(selected);
@@ -144,7 +90,7 @@ export default function MetaphorsPage() {
       <div>
         <h1 className="font-serif text-2xl font-bold text-[#1C1917] sm:text-3xl">Metaphors</h1>
         <p className="mt-2 font-serif text-sm italic leading-relaxed text-[#8B7355]">
-          Twelve images at a time — like Deep Dive&apos;s grid, but metaphor. Tap one to open it fully, rate it, save it.
+          Twelve images at a time — like Deep Dive&apos;s grid, but metaphor. Tap one to open it fully and rate it to keep it.
           <span className="font-semibold not-italic text-[#6A6360]"> {FAVOURITE_THRESHOLD}+</span> lands in favourites.
         </p>
       </div>
@@ -186,7 +132,11 @@ export default function MetaphorsPage() {
                   <button type="button" onClick={() => openDetail(m)} className="min-w-0 flex-1 text-left">
                     <span className="font-serif text-base font-bold leading-snug text-[#1C1917]">{m.metaphor}</span>
                   </button>
-                  <QuickAddRating onAdd={(v) => quickAddMetaphor(m, v)} />
+                  {lexicon[m.metaphor.toLowerCase()] && (
+                    <span className="shrink-0 rounded-full bg-[#F5EFE0] px-2.5 py-1 font-serif text-sm font-bold tabular-nums text-[#1C1917]">
+                      {lexicon[m.metaphor.toLowerCase()].rating.toFixed(1)}
+                    </span>
+                  )}
                 </div>
                 {m.theme && (
                   <span className="mt-1.5 inline-block rounded-full bg-[#F5EFE0] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-[#8B7355]">
@@ -216,12 +166,12 @@ export default function MetaphorsPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[100] bg-[#1C1917]/35 backdrop-blur-[2px]"
+              className="fixed inset-0 z-[100] m-0 bg-[#1C1917]/35 backdrop-blur-[2px]"
               onClick={closeMetaphorDetail}
               aria-hidden
             />
             <div
-              className="fixed inset-0 z-[110] flex items-end justify-center sm:items-center sm:p-4"
+              className="fixed inset-0 z-[110] m-0 flex items-end justify-center sm:items-center sm:p-4"
               onClick={closeMetaphorDetail}
             >
               <motion.section
@@ -250,7 +200,6 @@ export default function MetaphorsPage() {
               </div>
 
             <div className="relative overflow-hidden rounded-[1.35rem] bg-[#1C1917] px-4 py-8 shadow-xl sm:px-6 sm:py-10">
-              <AddWordBurst show={burst} />
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-[#8B7355]">Chosen image</p>
                 {selected.theme && (
@@ -283,18 +232,20 @@ export default function MetaphorsPage() {
             </div>
 
             <div className="space-y-5 rounded-2xl border border-[#EDE8E0] bg-white p-6">
-              <SentenceCapture word={selected.metaphor} value={userSentence} onChange={setUserSentence} />
-              <div className="border-t border-[#F5F0EA] pt-5">
-                <RatingDial value={rating} onChange={setRating} label="Your rating" />
-                <button
-                  type="button"
-                  onClick={() => addToLexicon(selected)}
-                  disabled={!userSentence.trim()}
-                  className="mt-4 w-full rounded-full bg-[#1C1917] py-3.5 text-sm font-semibold text-[#F5EFE0] disabled:opacity-40"
-                >
-                  Add to my lexicon
-                </button>
-              </div>
+              <KeepWord
+                key={selected.metaphor}
+                label="Rate this image"
+                base={{
+                  word: selected.metaphor,
+                  pronunciation: "—",
+                  part_of_speech: "metaphor",
+                  definition:
+                    [selected.unpacking, selected.image_strength].filter(Boolean).join("\n\n") || selected.unpacking,
+                  example: selected.example_sentences?.[0] ?? "",
+                  origin: selected.image_strength ?? "—",
+                  source: "metaphor",
+                }}
+              />
               <p className="text-center text-[11px] text-[#B0A898]">
                 {FAVOURITE_THRESHOLD}+ shows as a favourite on My Lexy.
               </p>

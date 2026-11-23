@@ -8,6 +8,7 @@ import {
   normalizeThreadList,
 } from "@/lib/threads";
 import { todayISODate as localTodayISODate } from "@/lib/dates";
+import { bumpVisit, type OrbId, type VisitLog } from "@/lib/orbs";
 import type {
   LexiconData,
   LexiconWord,
@@ -234,6 +235,30 @@ export const useTasteProfile = create<TasteProfileState>()(
 /** @deprecated use MAX_EXPLORATION_THREADS */
 export const MAX_GENRES = MAX_EXPLORATION_THREADS;
 export { MAX_EXPLORATION_THREADS };
+
+interface OrbUsageState {
+  /** Decaying visit score per orb — one of the things that sizes the orbs on Home. */
+  visits: VisitLog;
+  recordVisit: (id: OrbId) => void;
+}
+
+export const useOrbUsage = create<OrbUsageState>()(
+  persist(
+    (set) => ({
+      visits: {},
+      recordVisit: (id) =>
+        set((s) => {
+          const visits = bumpVisit(s.visits, id, Date.now());
+          return visits === s.visits ? s : { visits };
+        }),
+    }),
+    {
+      name: "lexy-orb-usage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({ visits: s.visits }),
+    }
+  )
+);
 
 interface TasteGridBatchState {
   /** Current 25-word Deep Dive batch — persists until the user taps New batch. */
