@@ -1,15 +1,12 @@
 "use client";
 
-import { AddWordBurst } from "@/components/AddWordBurst";
 import { IPA } from "@/components/IPA";
-import { RatingDial } from "@/components/RatingDial";
+import { KeepWord } from "@/components/KeepWord";
 import { ScribbleLexiconSidebar } from "@/components/ScribbleLexiconSidebar";
-import { SentenceCapture } from "@/components/SentenceCapture";
 import { analyseScribble, readHandwriting } from "@/lib/claude";
-import { playLexiconChime } from "@/lib/sound";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
-import { useLexicon, todayISODate } from "@/lib/store";
-import type { ScribbleAnalysis, VocabularyCandidate } from "@/lib/types";
+import { useLexicon } from "@/lib/store";
+import type { ScribbleAnalysis } from "@/lib/types";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { useCallback, useMemo, useState } from "react";
@@ -32,7 +29,6 @@ function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }
 }
 
 export default function ScribblePage() {
-  const upsertWord = useLexicon((s) => s.upsertWord);
   const appendScribbleRewrite = useLexicon((s) => s.appendScribbleRewrite);
   const scribble_rewrites = useLexicon((s) => s.scribble_rewrites);
 
@@ -45,9 +41,6 @@ export default function ScribblePage() {
   const [loadingAnalyse, setLoadingAnalyse] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ScribbleAnalysis | null>(null);
-  const [burst, setBurst] = useState<string | null>(null);
-  const [ratings, setRatings] = useState<Record<string, number>>({});
-  const [sentences, setSentences] = useState<Record<string, string>>({});
   const [openRewriteId, setOpenRewriteId] = useState<string | null>(null);
 
   const recentRewrites = useMemo(() => scribble_rewrites.slice(0, 12), [scribble_rewrites]);
@@ -91,11 +84,6 @@ export default function ScribblePage() {
         source_excerpt: text.slice(0, 2000),
         upgraded_version: r.upgraded_version,
       });
-      const init: Record<string, number> = {};
-      for (const c of r.vocabulary_candidates) {
-        init[c.word.toLowerCase()] = 7;
-      }
-      setRatings(init);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Analysis failed");
     } finally {
@@ -120,28 +108,6 @@ export default function ScribblePage() {
   }
 
   const analysedText = (rawText ?? pasted).trim();
-
-  function addCandidate(c: VocabularyCandidate) {
-    const key = c.word.toLowerCase();
-    const sentence = (sentences[key] ?? "").trim();
-    if (!sentence) return;
-    const r = ratings[key] ?? 7;
-    upsertWord({
-      word: c.word,
-      pronunciation: c.pronunciation,
-      part_of_speech: c.part_of_speech,
-      definition: c.definition,
-      example: c.example_sentence,
-      origin: c.origin,
-      rating: r,
-      added: todayISODate(),
-      source: "scribble",
-      user_sentence: sentence,
-    });
-    playLexiconChime();
-    setBurst(c.word);
-    setTimeout(() => setBurst(null), 700);
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-10 xl:max-w-[84rem]">
@@ -356,14 +322,13 @@ export default function ScribblePage() {
                 Words that felt right for you
               </h2>
               <p className="text-sm italic text-[#8B7355]">
-                Rate each word, then add it to your lexicon. {FAVOURITE_THRESHOLD}+ becomes a favourite.
+                Rate a word to keep it — every rating teaches Lexy your taste. {FAVOURITE_THRESHOLD}+ becomes a favourite.
               </p>
               <div className="space-y-4">
                 {result.vocabulary_candidates.map((c) => {
                   const key = c.word.toLowerCase();
                   return (
                     <div key={key} className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-5 shadow-sm">
-                      <AddWordBurst show={burst === c.word} />
                       <h3 className="font-serif text-2xl font-bold text-[#1C1917]">{c.word}</h3>
                       <IPA className="mt-1 block text-sm">{c.pronunciation}</IPA>
                       <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#B0A898]">
@@ -376,29 +341,19 @@ export default function ScribblePage() {
                       <p className="mt-3 text-xs leading-relaxed text-[#6A6360]">{c.origin}</p>
                       <p className="mt-3 text-sm italic leading-relaxed text-[#8B7355]">{c.why_relevant}</p>
                       <div className="mt-5 border-t border-[#F5F0EA] pt-5">
-                        <SentenceCapture
-                          word={c.word}
-                          value={sentences[key] ?? ""}
-                          onChange={(v) => setSentences((s) => ({ ...s, [key]: v }))}
-                          id={`sentence-${key}`}
+                        <KeepWord
+                          sentenceId={`sentence-${key}`}
+                          base={{
+                            word: c.word,
+                            pronunciation: c.pronunciation,
+                            part_of_speech: c.part_of_speech,
+                            definition: c.definition,
+                            example: c.example_sentence,
+                            origin: c.origin,
+                            source: "scribble",
+                          }}
                         />
                       </div>
-                      <div className="mt-5">
-                        <RatingDial
-                          label="Rating"
-                          value={ratings[key] ?? 7}
-                          onChange={(v) => setRatings((s) => ({ ...s, [key]: v }))}
-                          id={`rate-${key}`}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => addCandidate(c)}
-                        disabled={!(sentences[key] ?? "").trim()}
-                        className="mt-4 w-full rounded-full bg-[#1C1917] py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920] disabled:opacity-40"
-                      >
-                        Add to my lexicon
-                      </button>
                     </div>
                   );
                 })}

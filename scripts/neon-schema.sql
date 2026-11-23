@@ -17,3 +17,14 @@ CREATE TABLE IF NOT EXISTS lexicon_history (
 );
 
 CREATE INDEX IF NOT EXISTS lexicon_history_user_created_idx ON lexicon_history (user_id, created_at DESC);
+
+-- Deep Dive word stories, generated once and shared by everyone (a word's story isn't personal).
+-- /api/word-story also creates this on first use, so running it here is optional.
+CREATE TABLE IF NOT EXISTS word_stories (
+  word TEXT NOT NULL,
+  part TEXT NOT NULL,
+  version INT NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (word, part, version)
+);

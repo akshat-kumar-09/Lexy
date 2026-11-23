@@ -1,14 +1,11 @@
 "use client";
 
-import { AddWordBurst } from "@/components/AddWordBurst";
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
-import { RatingDial } from "@/components/RatingDial";
-import { SentenceCapture } from "@/components/SentenceCapture";
+import { KeepWord } from "@/components/KeepWord";
 import { sharpenLine, type SharpenInput } from "@/lib/claude";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
-import { playLexiconChime } from "@/lib/sound";
-import { todayISODate, useLexicon, useOrbUsage } from "@/lib/store";
+import { useLexicon, useOrbUsage } from "@/lib/store";
 import { splitByPhrases } from "@/lib/textMarks";
 import type { SharpenResult, SharpenVersion, SharpenWord } from "@/lib/types";
 import { AnimatePresence, motion } from "framer-motion";
@@ -340,37 +337,11 @@ function VersionCard({ version, best }: { version: SharpenVersion; best: boolean
   );
 }
 
-/** The exact words the versions reached for — tap one to make it yours. */
+/** The exact words the versions reached for — tap one, rate it, it's yours. */
 function WordsToKeep({ words, versions }: { words: SharpenWord[]; versions: SharpenVersion[] }) {
-  const upsertWord = useLexicon((s) => s.upsertWord);
+  const lexicon = useLexicon((s) => s.words);
   const [open, setOpen] = useState<string | null>(null);
-  const [sentence, setSentence] = useState("");
-  const [rating, setRating] = useState(7.5);
-  const [saved, setSaved] = useState<string[]>([]);
-  const [burst, setBurst] = useState(false);
   const selected = words.find((w) => w.word.toLowerCase() === open) ?? null;
-
-  function add(w: SharpenWord) {
-    if (!sentence.trim()) return;
-    const example =
-      versions.find((v) => v.text.toLowerCase().includes(w.word.toLowerCase()))?.text ?? versions[0]?.text ?? "";
-    upsertWord({
-      word: w.word,
-      pronunciation: w.pronunciation,
-      part_of_speech: w.part_of_speech,
-      definition: w.definition,
-      example,
-      origin: "",
-      rating,
-      added: todayISODate(),
-      source: "sharpen",
-      user_sentence: sentence.trim(),
-    });
-    playLexiconChime();
-    setBurst(true);
-    setSaved((s) => [...s, w.word.toLowerCase()]);
-    setTimeout(() => setBurst(false), 700);
-  }
 
   return (
     <section className="space-y-3">
@@ -379,17 +350,13 @@ function WordsToKeep({ words, versions }: { words: SharpenWord[]; versions: Shar
         {words.map((w) => {
           const key = w.word.toLowerCase();
           const on = key === open;
-          const kept = saved.includes(key);
+          const kept = lexicon[key];
           return (
             <button
               key={key}
               type="button"
               aria-expanded={on}
-              onClick={() => {
-                setOpen(on ? null : key);
-                setSentence("");
-                setRating(7.5);
-              }}
+              onClick={() => setOpen(on ? null : key)}
               className={`rounded-full px-4 py-2 font-serif text-sm transition ${
                 on
                   ? "bg-[#1C1917] text-[#F5EFE0]"
@@ -397,7 +364,7 @@ function WordsToKeep({ words, versions }: { words: SharpenWord[]; versions: Shar
               }`}
             >
               {w.word}
-              {kept && <span className="ml-1.5 text-[#1C7A40]">✓</span>}
+              {kept && <span className="ml-1.5 font-sans text-xs tabular-nums text-[#8B7355]">{kept.rating.toFixed(1)}</span>}
             </button>
           );
         })}
@@ -412,7 +379,6 @@ function WordsToKeep({ words, versions }: { words: SharpenWord[]; versions: Shar
             exit={{ opacity: 0 }}
             className="relative overflow-hidden rounded-2xl border border-[#EDE8E0] bg-white p-5 shadow-sm sm:p-6"
           >
-            <AddWordBurst show={burst} />
             <h3 className="font-serif text-2xl font-bold text-[#1C1917]">{selected.word}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <IPA className="text-sm">{selected.pronunciation}</IPA>
@@ -427,23 +393,24 @@ function WordsToKeep({ words, versions }: { words: SharpenWord[]; versions: Shar
             {selected.why && <p className="mt-2 text-sm italic leading-relaxed text-[#6A6360]">{selected.why}</p>}
 
             <div className="mt-5 border-t border-[#F5F0EA] pt-5">
-              <p className="text-sm italic text-[#8B7355]">
-                Rate it, write it in a sentence, then keep it. {FAVOURITE_THRESHOLD}+ becomes a favourite.
+              <p className="mb-4 text-sm italic text-[#8B7355]">
+                Rate it to keep it — every rating teaches Lexy your taste. {FAVOURITE_THRESHOLD}+ becomes a favourite.
               </p>
-              <div className="mt-4">
-                <SentenceCapture word={selected.word} value={sentence} onChange={setSentence} id="sharpen-sentence" />
-              </div>
-              <div className="mt-5">
-                <RatingDial value={rating} onChange={setRating} id="sharpen-rating" label="Rating" />
-              </div>
-              <button
-                type="button"
-                onClick={() => add(selected)}
-                disabled={!sentence.trim()}
-                className="mt-4 w-full rounded-full bg-[#1C1917] py-3 text-sm font-semibold text-[#F5EFE0] transition hover:bg-[#2C2920] disabled:opacity-40"
-              >
-                {saved.includes(selected.word.toLowerCase()) ? "Saved to my lexicon" : "Add to my lexicon"}
-              </button>
+              <KeepWord
+                sentenceId="sharpen-sentence"
+                base={{
+                  word: selected.word,
+                  pronunciation: selected.pronunciation,
+                  part_of_speech: selected.part_of_speech,
+                  definition: selected.definition,
+                  example:
+                    versions.find((v) => v.text.toLowerCase().includes(selected.word.toLowerCase()))?.text ??
+                    versions[0]?.text ??
+                    "",
+                  origin: "",
+                  source: "sharpen",
+                }}
+              />
             </div>
           </motion.div>
         )}
