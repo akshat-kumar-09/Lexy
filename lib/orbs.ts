@@ -12,7 +12,7 @@ import type { LexiconData, WordSource } from "@/lib/types";
  * Every orb carries one honest line on why it is the size it is.
  */
 
-export type OrbId = "dive" | "metaphors" | "feeling" | "sharpen" | "articulate" | "scribble" | "lexicon";
+export type OrbId = "dive" | "metaphors" | "feeling" | "sharpen" | "phrases" | "articulate" | "scribble" | "lexicon";
 
 export interface OrbDef {
   id: OrbId;
@@ -27,7 +27,7 @@ export interface OrbDef {
   ink: string;
 }
 
-/** All in Lexy's own palette — ink, gold, umber, graphite, sand, parchment, champagne. */
+/** All in Lexy's own palette — ink, gold, umber, graphite, oxblood, sand, parchment, champagne. */
 export const ORBS: readonly OrbDef[] = [
   {
     id: "dive",
@@ -71,6 +71,17 @@ export const ORBS: readonly OrbDef[] = [
     core: "#3B3835",
     rim: "#121110",
     glow: "rgba(59,56,53,0.16)",
+    ink: "#F5EFE0",
+  },
+  {
+    id: "phrases",
+    href: "/phrases",
+    label: "Turn a phrase",
+    tagline: "From everyday to Shakespeare",
+    hi: "#B98A7C",
+    core: "#6E3A31",
+    rim: "#24110D",
+    glow: "rgba(110,58,49,0.18)",
     ink: "#F5EFE0",
   },
   {
@@ -154,6 +165,7 @@ const SOURCE_ORB: Record<WordSource, OrbId> = {
   scribble: "scribble",
   articulate: "feeling",
   sharpen: "sharpen",
+  phrases: "phrases",
 };
 
 /** Keeping a word, writing a page and revealing a day of metaphors weigh more than a visit. */

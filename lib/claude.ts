@@ -4,6 +4,7 @@ import {
   type LexyErrorCode,
   type LexyTaskName,
 } from "@/lib/lexyApi";
+import { normalizePhraseLadder, type PhraseLadderResult } from "@/lib/phraseLadder";
 import { clampVocabLevel } from "@/lib/vocabLevels";
 import type {
   DeepDiveResult,
@@ -448,5 +449,18 @@ export async function sharpenLine(input: SharpenInput): Promise<SharpenResult> {
   });
   const result = normalizeSharpenResult(raw, line);
   if (!result.versions.length) throw new Error("Lexy couldn't sharpen that one — try adding what you mean.");
+  return result;
+}
+
+/**
+ * Turn a phrase: the words they tapped in their line (or the whole line, if it's short and
+ * nothing was tapped) → substitutes from subtle to Shakespearean.
+ */
+export async function findPhraseLadder(line: string, target: string): Promise<PhraseLadderResult> {
+  const l = line.trim();
+  const t = target.replace(/\s+/g, " ").trim();
+  const raw = await runTask<unknown>("phrase-ladder", { line: l, target: t });
+  const result = normalizePhraseLadder(raw, l, t);
+  if (!result.rungs.length) throw new Error("Lexy couldn't find substitutes for that — try tapping fewer words.");
   return result;
 }

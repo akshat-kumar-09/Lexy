@@ -1,6 +1,6 @@
 import type { VocabLevel } from "@/lib/vocabLevels";
 
-export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily" | "articulate" | "sharpen";
+export type WordSource = "scribble" | "metaphor" | "deep_dive" | "daily" | "articulate" | "sharpen" | "phrases";
 
 export interface LexiconWord {
   word: string;

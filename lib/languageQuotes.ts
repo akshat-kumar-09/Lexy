@@ -14,6 +14,7 @@ export const ESSENCE_BY_PATH: Record<string, string> = {
     "Describe a feeling in your own words and take the exact one — naming it is how you gain power over it, and tone, body, and breath are part of the sentence.",
   "/sharpen":
     "“The difference between the almost right word and the right word is really a large matter — ’tis the difference between the lightning-bug and the lightning.” — Mark Twain",
+  "/phrases": "“Mend your speech a little, lest it may mar your fortunes.” — King Lear",
   "/lexicon":
     "A lexicon you curate is a portrait of your mind: what you keep close is what you are willing to see clearly.",
   "/scribble":

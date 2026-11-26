@@ -118,8 +118,8 @@ describe("layoutOrbs", () => {
   ];
   const weightSets = [
     ORBS.map(() => 1),
-    [3.4, 1, 0.8, 1.2, 0.9, 2.2, 1.6],
-    [1, 1, 1, 1, 1, 1, 3.6],
+    [3.4, 1, 0.8, 1.2, 1.1, 0.9, 2.2, 1.6],
+    [1, 1, 1, 1, 1, 1, 1, 3.6],
   ];
 
   for (const [w, h] of fields) {
@@ -138,7 +138,7 @@ describe("layoutOrbs", () => {
   it("keeps each orb in the same part of the sky when sizes change", () => {
     const [w, h] = [1280, 700];
     const even = layoutOrbs(computeRadii(ORBS.map(() => 1), w, h), w, h).positions;
-    const skewed = layoutOrbs(computeRadii([3.4, 1, 0.8, 1.2, 0.9, 2.2, 1.6], w, h), w, h).positions;
+    const skewed = layoutOrbs(computeRadii([3.4, 1, 0.8, 1.2, 1.1, 0.9, 2.2, 1.6], w, h), w, h).positions;
     const angle = (p: { x: number; y: number }) => Math.atan2(p.y - h / 2, p.x - w / 2);
     even.forEach((p, i) => {
       const d = Math.abs(angle(p) - angle(skewed[i]));
@@ -158,6 +158,7 @@ describe("orbIdForLocation", () => {
     assert.equal(orbIdForLocation("/articulate"), "articulate");
     assert.equal(orbIdForLocation("/articulate", "#feeling"), "feeling");
     assert.equal(orbIdForLocation("/sharpen"), "sharpen");
+    assert.equal(orbIdForLocation("/phrases"), "phrases");
     assert.equal(orbIdForLocation("/settings"), null);
     assert.equal(orbIdForLocation("/"), null);
   });
