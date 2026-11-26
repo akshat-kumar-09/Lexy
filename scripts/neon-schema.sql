@@ -28,3 +28,12 @@ CREATE TABLE IF NOT EXISTS word_stories (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (word, part, version)
 );
+
+-- Daily Claude allowance: one row per person per UTC day ("user:<clerk id>"), plus "*all*" for
+-- everyone together. /api/lexy and /api/word-story create this on first use too.
+CREATE TABLE IF NOT EXISTS lexy_usage (
+  subject TEXT NOT NULL,
+  day DATE NOT NULL,
+  calls INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (subject, day)
+);

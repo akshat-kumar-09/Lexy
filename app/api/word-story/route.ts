@@ -1,8 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropic, MISSING_CLAUDE_KEY, replyText } from "@/lib/anthropicServer";
 import { assertSameOrigin, rateLimit } from "@/lib/apiGuard";
 import { getSql } from "@/lib/db";
+import { DAILY_LIMIT_REACHED, LEXY_RESTING, SIGN_IN_NEEDED, type LexyErrorCode } from "@/lib/lexyApi";
 import { LEXY_MODEL } from "@/lib/model";
 import { parseModelJson } from "@/lib/parseJson";
+import { currentUserId } from "@/lib/serverAuth";
+import { spendAllowance } from "@/lib/usage";
 import {
   cleanSenseHint,
   cleanWordInput,
@@ -24,18 +28,11 @@ export const maxDuration = 60;
  *
  * One part of a word's Deep Dive story. Stories aren't personal, so each part is generated once
  * (server-side, with Lexy's own prompt — callers can't inject content) and then served to everyone
- * from Postgres, with a long CDN cache on top.
+ * from Postgres, with a long CDN cache on top. Reading a cached story is open to all; generating a
+ * new one needs sign-in and spends from the daily allowance.
  */
 
 type Sql = NonNullable<ReturnType<typeof getSql>>;
-
-let anthropic: Anthropic | null = null;
-function getAnthropic(): Anthropic | null {
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) return null;
-  anthropic ??= new Anthropic({ apiKey, maxRetries: 1 });
-  return anthropic;
-}
 
 let tableReady: Promise<void> | null = null;
 function ensureTable(sql: Sql): Promise<void> {
@@ -76,8 +73,11 @@ async function writeCached(sql: Sql, key: string, part: WordStoryPart, data: Wor
   `;
 }
 
-function fail(status: number, message: string) {
-  return NextResponse.json({ error: { message } }, { status, headers: { "Cache-Control": "no-store" } });
+function fail(status: number, message: string, code?: LexyErrorCode) {
+  return NextResponse.json(
+    { error: code ? { message, code } : { message } },
+    { status, headers: { "Cache-Control": "no-store" } }
+  );
 }
 
 function ok(part: WordStoryPart, data: WordStoryPartData, cached: boolean) {
@@ -114,12 +114,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Only fresh generations count against the limit — cached words are free to open.
+  // Only fresh generations need sign-in and count against the limits — cached words are free to open.
+  const userId = await currentUserId();
+  if (!userId) return fail(401, SIGN_IN_NEEDED, "signin");
+
   const rateErr = rateLimit(req, "word-story", 90, 60_000);
   if (rateErr) return rateErr;
 
   const client = getAnthropic();
-  if (!client) return fail(500, "Lexy's server is missing its Claude key. Set ANTHROPIC_API_KEY.");
+  if (!client) return fail(500, MISSING_CLAUDE_KEY);
+
+  const allowance = await spendAllowance(userId);
+  if (allowance === "user") return fail(429, DAILY_LIMIT_REACHED, "quota");
+  if (allowance === "everyone") return fail(429, LEXY_RESTING, "quota");
 
   const spec = WORD_STORY_SPECS[part];
   let text: string;
@@ -131,10 +138,7 @@ export async function GET(req: NextRequest) {
       messages: [{ role: "user", content: wordStoryUserMessage(word, sense) }],
     });
     if (msg.stop_reason === "refusal") return fail(422, "Lexy can't open that word.");
-    text = msg.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
+    text = replyText(msg);
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return fail(429, "Lexy is busy — try that word again in a moment.");
     if (e instanceof Anthropic.APIError) {

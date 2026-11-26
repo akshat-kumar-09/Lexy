@@ -3,6 +3,7 @@
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
 import { KeepWord } from "@/components/KeepWord";
+import { LexyErrorNote } from "@/components/LexyErrorNote";
 import { nameFeeling } from "@/lib/claude";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 import { useOrbUsage } from "@/lib/store";
@@ -105,7 +106,7 @@ export function FeelingFinder() {
       )}
 
       {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>
+        <LexyErrorNote message={error} />
       )}
 
       <AnimatePresence>

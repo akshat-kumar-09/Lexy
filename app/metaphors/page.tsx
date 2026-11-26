@@ -2,6 +2,7 @@
 
 import { GenreStrip } from "@/components/GenreStrip";
 import { KeepWord } from "@/components/KeepWord";
+import { LexyErrorNote } from "@/components/LexyErrorNote";
 import { generateMetaphorGrid } from "@/lib/claude";
 import { useLexicon, useTasteProfile, todayISODate } from "@/lib/store";
 import type { MetaphorGridItem } from "@/lib/types";
@@ -98,7 +99,7 @@ export default function MetaphorsPage() {
       <GenreStrip compact />
 
       {error && (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>
+        <LexyErrorNote message={error} />
       )}
 
       <section className="space-y-4">
