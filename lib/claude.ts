@@ -1,7 +1,10 @@
-import { LEXY_MODEL } from "@/lib/model";
-import { parseModelJson } from "@/lib/parseJson";
-import { normalizeThreadList, threadsContextForPrompt } from "@/lib/threads";
-import { clampVocabLevel, levelPromptBlock } from "@/lib/vocabLevels";
+import {
+  isBlockingLexyError,
+  LexyRequestError,
+  type LexyErrorCode,
+  type LexyTaskName,
+} from "@/lib/lexyApi";
+import { clampVocabLevel } from "@/lib/vocabLevels";
 import type {
   DeepDiveResult,
   FeelingNameCandidate,
@@ -18,197 +21,64 @@ import type {
   TasteGridWord,
 } from "@/lib/types";
 
-/** Same-origin proxy avoids browser CORS blocks on api.anthropic.com — server holds the one shared key. */
-const CHAT = "/api/claude/chat";
-const MODEL = LEXY_MODEL;
+/**
+ * Lexy's Claude features, from the browser's side. Each call names a task and sends its inputs to
+ * /api/lexy, which builds the prompt on the server (lib/lexyTasks.ts), checks sign-in and the
+ * daily allowance, and calls Claude with Lexy's key. Batching, merging and tidying stay here.
+ */
 
-const JSON_ONLY = "Respond with ONLY the JSON object — no markdown code fences, no commentary before or after.";
+const TASK_URL = "/api/lexy";
 
-async function chatJson<T>(
-  system: string,
-  user: string,
-  maxTokens = 2048,
-  temperature = 0.4
-): Promise<T> {
-  const res = await fetch(CHAT, {
+/** Run one named task. JSON tasks resolve to the parsed reply; handwriting resolves to text. */
+async function runTask<T>(task: LexyTaskName, input: Record<string, unknown>): Promise<T> {
+  const res = await fetch(TASK_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      temperature,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task, input }),
   });
 
-  const rawText = await res.text();
-  let data: {
-    error?: { message?: string };
-    content?: { type: string; text?: string }[];
-  };
+  const raw = await res.text();
+  let body: { data?: unknown; text?: string; error?: string | { message?: string; code?: LexyErrorCode } };
   try {
-    data = JSON.parse(rawText) as typeof data;
+    body = JSON.parse(raw) as typeof body;
   } catch {
-    throw new Error(rawText.slice(0, 280) || `Claude error ${res.status}`);
+    throw new LexyRequestError(raw.slice(0, 200) || `Lexy error ${res.status}`, res.status);
   }
 
   if (!res.ok) {
-    const msg = data.error?.message ?? rawText.slice(0, 280);
-    throw new Error(msg || `Claude error ${res.status}`);
+    const err = body.error;
+    const message = typeof err === "string" ? err : err?.message;
+    const code = typeof err === "object" ? err?.code : undefined;
+    throw new LexyRequestError(message || `Lexy error ${res.status}`, res.status, code);
   }
-
-  const block = data.content?.find((b) => b.type === "text");
-  const raw = block?.text;
-  if (!raw) throw new Error("Empty response from model");
-  return parseModelJson<T>(raw);
+  return (body.data ?? body.text) as T;
 }
 
-export async function readHandwriting(
-  base64: string,
-  mediaType: string
-): Promise<string> {
-  const res = await fetch(CHAT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 4000,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType, data: base64 },
-            },
-            {
-              type: "text",
-              text: "Read this handwritten text exactly as written. Preserve punctuation, line breaks, and voice. Output plain text only — no preamble.",
-            },
-          ],
-        },
-      ],
-    }),
-  });
-  const rawText = await res.text();
-  let data: {
-    error?: { message?: string };
-    content?: { type: string; text?: string }[];
+/** A failed batch is skipped (the fill call covers it) — unless sign-in or the daily limit stopped it. */
+function skipUnlessBlocking<T>(fallback: T) {
+  return (e: unknown): T => {
+    if (isBlockingLexyError(e)) throw e;
+    return fallback;
   };
-  try {
-    data = JSON.parse(rawText) as typeof data;
-  } catch {
-    throw new Error(rawText.slice(0, 280) || `Vision error ${res.status}`);
-  }
-  if (!res.ok) {
-    throw new Error(data.error?.message ?? `Vision error ${res.status}`);
-  }
-  const block = data.content?.find((b) => b.type === "text");
-  const text = block?.text?.trim();
+}
+
+function asObject(v: unknown): Record<string, unknown> {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+export async function readHandwriting(base64: string, mediaType: string): Promise<string> {
+  const text = (await runTask<string>("handwriting", { image: base64, mediaType }))?.trim();
   if (!text) throw new Error("Could not read handwriting");
   return text;
 }
 
-const SCRIBBLE_REWRITE_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
-Analyse the user's morning writing and return ONLY valid JSON matching this shape:
-{
-  "upgraded_version": "string — full text rewritten in richer, more precise language; same voice, elevated expression",
-  "word_upgrades": [
-    {
-      "original_phrase": "string",
-      "upgraded_word": "string",
-      "pronunciation": "IPA in slashes like /wɜːd/",
-      "why": "why this upgrade sharpens the line"
-    }
-  ]
-}
-Rules:
-- word_upgrades: exactly 4 or 5 items (pick the best four or five spots).
-- Keep their voice in upgraded_version; do not sound generic.
-${JSON_ONLY}`;
-
-const SCRIBBLE_IDEAS_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a master editor and lexicographer.
-Analyse the user's morning writing and return ONLY valid JSON matching this shape:
-{
-  "key_idea_expansions": [
-    { "idea": "short label", "expansion": "beautiful expansion in 2-4 sentences" }
-  ],
-  "vocabulary_candidates": [
-    {
-      "word": "lowercase lemma",
-      "pronunciation": "IPA",
-      "part_of_speech": "noun|verb|adjective|etc",
-      "definition": "clear definition",
-      "example_sentence": "example in their voice",
-      "origin": "etymology, concise",
-      "why_relevant": "This one felt right for you because…"
-    }
-  ]
-}
-Rules:
-- key_idea_expansions: 1 or 2 items.
-- vocabulary_candidates: 5 or 6 words tied to their themes; every word MUST include IPA pronunciation.
-${JSON_ONLY}`;
-
 /** Two parallel completions (rewrite + ideas/vocab) so wall-clock time tracks the slower call instead of one long one. */
 export async function analyseScribble(text: string): Promise<ScribbleAnalysis> {
-  const user = `Morning scribble:\n\n${text}`;
   const [rewrite, ideas] = await Promise.all([
-    chatJson<Pick<ScribbleAnalysis, "upgraded_version" | "word_upgrades">>(
-      SCRIBBLE_REWRITE_SYSTEM,
-      user,
-      2048
-    ),
-    chatJson<Pick<ScribbleAnalysis, "key_idea_expansions" | "vocabulary_candidates">>(
-      SCRIBBLE_IDEAS_SYSTEM,
-      user,
-      2048
-    ),
+    runTask<Pick<ScribbleAnalysis, "upgraded_version" | "word_upgrades">>("scribble-rewrite", { text }),
+    runTask<Pick<ScribbleAnalysis, "key_idea_expansions" | "vocabulary_candidates">>("scribble-ideas", { text }),
   ]);
   return { ...rewrite, ...ideas };
-}
-
-function metaphorGridSystem(itemCount: number, includeTheme: boolean): string {
-  return `You are Lexy — a working poet's ear for image, not a corporate copywriter. Return ONLY valid JSON:
-{
-  "suggestions": [
-    {
-      "metaphor": "a genuinely striking figurative phrase, 3-8 words, built from ONE concrete, specific, sensory image — the kind a real writer would reach for, not a stock phrase",
-      "unpacking": "plain language: what the image means, and why THIS specific image (not a generic one) captures it",
-      "image_strength": "one sentence naming the precise sensory or physical detail that makes it land — not an abstract restatement",
-      "example_sentences": ["three natural sentences using or alluding to this metaphor"],
-      "why_for_you": "one short line: why this fits their taste and their exploration themes"${
-        includeTheme
-          ? `,
-      "theme": "the exact exploration theme label (copied verbatim from the list in the user message) this metaphor best fits"`
-          : ""
-      }
-    }
-  ]
-}
-
-The bar: each metaphor should make someone stop and feel something — recognition, a small ache, a laugh, a chill — not nod along politely. If it would sit comfortably on a motivational poster or in a corporate deck, it has failed.
-
-Hard ban — never produce these, or close cousins of them in any phrasing: a rollercoaster of emotions, a puzzle piece (missing or falling into place), a double-edged sword, a blank canvas, a ship/boat navigating storms, a garden that needs tending or watering, a tapestry of anything, a symphony of anything, walls closing in, a house of cards, riding the waves, an anchor in a storm, a book with unwritten pages, a butterfly emerging or breaking free, a phoenix rising from ashes, a mirror reflecting something, a maze or labyrinth, a dance between two things, threads weaving together, a compass guiding you, planting seeds, building bridges, a marathon not a sprint.
-
-Instead, reach for ONE concrete, specific, physical image per metaphor, drawn from a real domain: a particular craft or trade, a specific animal's behaviour, weather at a precise moment, food and its exact texture or taste, an object worn down by a very specific use, a bodily sensation, one very particular everyday scene. Ground it in something you could photograph or touch — never an abstract concept wearing a costume.
-
-Rules:
-- suggestions must contain EXACTLY ${itemCount} items.
-- Each item needs all fields. example_sentences must have exactly 3 strings.
-- Metaphors must be distinct from each other and drawn from different domains — no two from the same well (not two kitchen images, not two weather images).
-- Do not repeat any metaphor phrase listed in the user message exclusion list (case-insensitive), and do not just reskin one of them with a synonym.
-- Another completion fills the rest of this grid in parallel — steer toward a noticeably different domain and register so batches rarely collide (overlap discarded).${
-    includeTheme
-      ? `\n- Every item's "theme" field must be EXACTLY one of the exploration theme labels listed in the user message — copy it verbatim, picking whichever one that metaphor best fits.`
-      : ""
-  }
-${JSON_ONLY}`;
 }
 
 function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set<string>): MetaphorGridItem[] {
@@ -225,19 +95,12 @@ function mergeMetaphorSuggestions(batches: MetaphorGridItem[][], excludeSet: Set
   return out;
 }
 
-const METAPHOR_GRID_BATCH_SIZES = [3, 3, 3, 3] as const;
-const METAPHOR_GRID_BATCH_LABELS = ["A", "B", "C", "D"] as const;
-/** Assigning each parallel call its own concrete domain does more for variety than hoping the model self-diversifies. */
-const METAPHOR_GRID_BATCH_DOMAINS = [
-  "weather, animals, or the outdoors at one precise moment",
-  "an ordinary object — what a hand actually holds, wears down, or repairs",
-  "food, cooking, or a specific craft/trade — the exact texture or technique of making something",
-  "the body — one precise physical sensation or spatial feeling",
-] as const;
+/** Four parallel batches of three — the server pins each to its own concrete domain. */
+const METAPHOR_GRID_BATCHES = 4;
 
 /**
  * Exactly 12 metaphors for the grid — same rhythm as Deep Dive's 25-word grid, fewer cells.
- * Uses four parallel API requests (3 each), each pinned to a different concrete domain, so
+ * Uses four parallel requests (3 each), each pinned to a different concrete domain, so
  * latency tracks the slowest call and the set doesn't collapse into one register.
  *
  * `onBatch`, if given, fires as soon as each parallel completion lands (and again for the
@@ -250,19 +113,9 @@ export async function generateMetaphorGrid(
   excludeMetaphors: string[] = [],
   onBatch?: (items: MetaphorGridItem[]) => void
 ): Promise<MetaphorGridResponse> {
-  const keys = Object.keys(lexicon).slice(0, 40);
-  const known = keys.length
-    ? keys.join(", ")
-    : "none yet — infer a thoughtful, image-minded reader";
-
-  const threadBlock = threadsContextForPrompt(explorationThreads);
-  const includeTheme = normalizeThreadList(explorationThreads).length > 2;
+  const known = Object.keys(lexicon).slice(0, 40);
   const excludeSet = new Set(excludeMetaphors.map((m) => m.toLowerCase().trim()).filter(Boolean));
-  const excludeList = [...excludeSet].slice(0, 120).join(", ") || "(none)";
-
-  const baseUser = `They already keep these words/phrases: ${known}
-${threadBlock}
-Already shown or saved today (do NOT repeat these images): ${excludeList}`;
+  const shared = { known, threads: explorationThreads, exclude: [...excludeSet].slice(0, 120) };
 
   const dispatched = new Set<string>();
   function emit(items: MetaphorGridItem[]) {
@@ -277,38 +130,30 @@ Already shown or saved today (do NOT repeat these images): ${excludeList}`;
   }
 
   const batches = await Promise.all(
-    METAPHOR_GRID_BATCH_SIZES.map((size, i) =>
-      chatJson<MetaphorGridResponse>(
-        metaphorGridSystem(size, includeTheme),
-        `${baseUser}
-
-Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphors — one quarter of today's grid (three other completions supply the rest, in parallel). Draw specifically from this domain: ${METAPHOR_GRID_BATCH_DOMAINS[i]}. Fresh, specific, felt — never stock phrasing.`,
-        1536,
-        0.85
-      ).then((r) => {
-        emit(Array.isArray(r.suggestions) ? r.suggestions : []);
-        return r;
-      }).catch(() => ({ suggestions: [] as MetaphorGridItem[] }))
+    Array.from({ length: METAPHOR_GRID_BATCHES }, (_, batch) =>
+      runTask<MetaphorGridResponse>("metaphor-batch", { ...shared, batch })
+        .then((r) => {
+          emit(Array.isArray(r?.suggestions) ? r.suggestions : []);
+          return r;
+        })
+        .catch(skipUnlessBlocking({ suggestions: [] as MetaphorGridItem[] }))
     )
   );
 
   const suggestions = mergeMetaphorSuggestions(
-    batches.map((b) => (Array.isArray(b.suggestions) ? b.suggestions : [])),
+    batches.map((b) => (Array.isArray(b?.suggestions) ? b.suggestions : [])),
     excludeSet
   );
 
-  const baseSystem12 = metaphorGridSystem(12, includeTheme);
-
   if (suggestions.length < 12) {
-    const need = 12 - suggestions.length;
-    const fill = await chatJson<MetaphorGridResponse>(
-      `${baseSystem12}\nThe merged batches had too few valid items. Return JSON with "suggestions" containing EXACTLY ${need} new items only. Do not repeat: ${suggestions.map((s) => s.metaphor).join("; ")}.`,
-      `Still exclude: ${excludeList}\nStill tuned to:\n${known}\n${threadBlock}`,
-      2048,
-      0.8
-    ).catch(() => ({ suggestions: [] as MetaphorGridItem[] }));
-    emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
-    for (const s of fill.suggestions ?? []) {
+    const fill = await runTask<MetaphorGridResponse>("metaphor-fill", {
+      ...shared,
+      need: 12 - suggestions.length,
+      have: suggestions.map((s) => s.metaphor),
+    }).catch(skipUnlessBlocking({ suggestions: [] as MetaphorGridItem[] }));
+    const fillItems = Array.isArray(fill?.suggestions) ? fill.suggestions : [];
+    emit(fillItems);
+    for (const s of fillItems) {
       if (suggestions.length >= 12) break;
       const k = s.metaphor?.toLowerCase().trim();
       if (k && !excludeSet.has(k) && !suggestions.some((x) => x.metaphor.toLowerCase() === k)) {
@@ -320,49 +165,9 @@ Return ONLY batch ${METAPHOR_GRID_BATCH_LABELS[i]}: exactly ${size} NEW metaphor
   return { suggestions: suggestions.slice(0, 12) };
 }
 
-function lexiconTastePayload(lexicon: Record<string, LexiconWord>): string {
-  const rows = Object.values(lexicon)
-    .sort((a, b) => b.rating - a.rating)
-    .map((w) => `${w.word}: ${w.rating}`);
-  return rows.length ? rows.join("\n") : "(empty — infer a literary, curious reader)";
-}
-
-function tasteGridSystem(itemCount: number, includeTheme: boolean): string {
-  return `You are Lexy — warm, literary, never corporate. Return ONLY valid JSON:
-{
-  "suggestions": [
-    {
-      "word": "lemma",
-      "pronunciation": "IPA with slashes — mandatory on every word",
-      "part_of_speech": "noun|verb|adjective|etc",
-      "level": 3,
-      "definition": "one concise line (max ~18 words)",
-      "why_for_you": "one short line: why this word fits their emerging taste (not generic)"${
-        includeTheme
-          ? `,
-      "theme": "the exact exploration theme label (copied verbatim from the list in the user message) this word best fits"`
-          : ""
-      }
-    }
-  ]
-}
-
-${levelPromptBlock()}
-
-Rules:
-- suggestions must contain EXACTLY ${itemCount} items.
-- Every word MUST have IPA pronunciation in slashes and an integer level 1–5.
-- Do not include any word the user already has in their lexicon (case-insensitive match on lemma).
-- Infer taste from high-rated words (lean that direction); note low-rated patterns to avoid pushing similar words unless clearly distinct.
-- Diversify: not all rare words in the same semantic cluster — give them a spread that still feels coherent to *their* sensibility.
-- Level 3 words should be CONVERSATION-READY: someone could use them in a text or meeting without sounding like they're showing off.
-- If user-chosen exploration themes are provided in the user message, at least half of YOUR suggestions should clearly orbit those themes (spread across them): vocabulary, near-synonyms, and register fits — while the rest can bridge outward so the batch still feels varied.${
-    includeTheme
-      ? `\n- Every item's "theme" field must be EXACTLY one of the exploration theme labels listed in the user message — copy it verbatim, picking whichever one that word best fits.`
-      : ""
-  }
-- Another completion fills the rest of the same grid in parallel — bias toward lemmas from distinct semantic clusters so batches rarely duplicate ideas (overlap will be discarded).
-${JSON_ONLY}`;
+/** What the server needs to know about their taste: each word and its rating. */
+function lexiconRows(lexicon: Record<string, LexiconWord>) {
+  return Object.values(lexicon).map((w) => ({ word: w.word, rating: w.rating }));
 }
 
 function normalizeTasteGridWord(s: TasteGridWord): TasteGridWord {
@@ -399,14 +204,14 @@ function mergeTasteSuggestions(
   return out;
 }
 
-const TASTE_GRID_BATCH_SIZES = [5, 5, 5, 5, 5] as const;
-const TASTE_GRID_BATCH_LABELS = ["A", "B", "C", "D", "E"] as const;
+/** Five parallel batches of five. */
+const TASTE_GRID_BATCHES = 5;
 
 /**
  * Exactly 25 words tailored to current ratings. Excludes words already in the lexicon.
  * Call again after each rating so the grid reflects refined taste.
  *
- * Uses five parallel API requests (5 words each) instead of one huge completion — wall-clock
+ * Uses five parallel requests (5 words each) instead of one huge completion — wall-clock
  * time tracks the slowest 5-word batch instead of a 25-word (or even 13-word) completion.
  *
  * `onBatch`, if given, fires as soon as each of those five completions lands (and again for the
@@ -420,21 +225,11 @@ export async function generateTasteGrid(
   onBatch?: (words: TasteGridWord[]) => void
 ): Promise<TasteGridResponse> {
   const exclude = new Set(Object.keys(lexicon).map((k) => k.toLowerCase()));
-  const excludeList = [...exclude].slice(0, 200).join(", ") || "(none)";
-
-  const threadBlock = threadsContextForPrompt(explorationThreads);
-  const includeTheme = normalizeThreadList(explorationThreads).length > 2;
-
-  const last =
+  const lastRated =
     context?.lastRatedWord && context.lastRating != null
-      ? `They just rated "${context.lastRatedWord}" at ${context.lastRating}/10 — let that inform the next grid.\n`
-      : "";
-
-  const baseUser = `${last}Words already in their lexicon (do NOT suggest these again): ${excludeList}
-
-Their lexicon with ratings (higher = more love):
-${lexiconTastePayload(lexicon)}
-${threadBlock}`;
+      ? { word: context.lastRatedWord, rating: context.lastRating }
+      : undefined;
+  const shared = { lexicon: lexiconRows(lexicon), threads: explorationThreads };
 
   const dispatched = new Set<string>();
   function emit(words: TasteGridWord[]) {
@@ -449,40 +244,32 @@ ${threadBlock}`;
   }
 
   const batches = await Promise.all(
-    TASTE_GRID_BATCH_SIZES.map((size, i) =>
-      chatJson<{ suggestions: TasteGridWord[] }>(
-        tasteGridSystem(size, includeTheme),
-        `${baseUser}
-
-Return ONLY batch ${TASTE_GRID_BATCH_LABELS[i]}: exactly ${size} NEW words — one fifth of a 25-word taste grid (four other completions supply the rest, in parallel). Bias toward a distinct semantic corner so batches rarely overlap.`,
-        1536,
-        0.75
-      ).then((r) => {
-        emit(Array.isArray(r.suggestions) ? r.suggestions : []);
-        return r;
-      }).catch(() => ({ suggestions: [] as TasteGridWord[] }))
+    Array.from({ length: TASTE_GRID_BATCHES }, (_, batch) =>
+      runTask<{ suggestions: TasteGridWord[] }>("taste-batch", { ...shared, batch, lastRated })
+        .then((r) => {
+          emit(Array.isArray(r?.suggestions) ? r.suggestions : []);
+          return r;
+        })
+        .catch(skipUnlessBlocking({ suggestions: [] as TasteGridWord[] }))
     )
   );
 
   let filtered = filterGridLevels(
     mergeTasteSuggestions(
-      batches.map((b) => (Array.isArray(b.suggestions) ? b.suggestions : [])),
+      batches.map((b) => (Array.isArray(b?.suggestions) ? b.suggestions : [])),
       exclude
     )
   );
 
-  const baseSystem25 = tasteGridSystem(25, includeTheme);
-
   if (filtered.length < 25) {
-    const need = 25 - filtered.length;
-    const fill = await chatJson<{ suggestions: TasteGridWord[] }>(
-      `${baseSystem25}\nThe merged batches had too few valid items after exclusions. Return a JSON object with "suggestions" containing EXACTLY ${need} new items only (same shape). Do not repeat: ${filtered.map((f) => f.word).join(", ")}.`,
-      `Still exclude from lexicon: ${excludeList}\nStill tuned to:\n${lexiconTastePayload(lexicon)}\n${threadBlock}`,
-      2560,
-      0.7
-    ).catch(() => ({ suggestions: [] as TasteGridWord[] }));
-    emit(Array.isArray(fill.suggestions) ? fill.suggestions : []);
-    for (const s of fill.suggestions ?? []) {
+    const fill = await runTask<{ suggestions: TasteGridWord[] }>("taste-fill", {
+      ...shared,
+      need: 25 - filtered.length,
+      have: filtered.map((f) => f.word),
+    }).catch(skipUnlessBlocking({ suggestions: [] as TasteGridWord[] }));
+    const fillWords = Array.isArray(fill?.suggestions) ? fill.suggestions : [];
+    emit(fillWords);
+    for (const s of fillWords) {
       if (filtered.length >= 25) break;
       const k = s.word?.toLowerCase().trim();
       if (!k || exclude.has(k) || filtered.some((x) => x.word.toLowerCase() === k)) continue;
@@ -510,26 +297,17 @@ export async function generateTasteReplacements(
 ): Promise<TasteGridWord[]> {
   const n = Math.max(1, Math.min(5, Math.round(count)));
   const exclude = new Set([...Object.keys(lexicon), ...keepOut].map((k) => k.toLowerCase().trim()));
-  const includeTheme = normalizeThreadList(explorationThreads).length > 2;
-  const last = lastRated
-    ? `They just rated "${lastRated.word}" at ${lastRated.rating}/10 — let that steer these picks most of all.\n`
-    : "";
 
-  const r = await chatJson<{ suggestions: TasteGridWord[] }>(
-    tasteGridSystem(n, includeTheme),
-    `${last}Words already in their lexicon or on their grid (do NOT suggest these): ${[...exclude].slice(0, 240).join(", ") || "(none)"}
-
-Their lexicon with ratings (higher = more love):
-${lexiconTastePayload(lexicon)}
-${threadsContextForPrompt(explorationThreads)}
-
-Return exactly ${n} NEW word${n === 1 ? "" : "s"} to replace the ones they just rated on their grid.`,
-    1024,
-    0.75
-  );
+  const r = await runTask<{ suggestions: TasteGridWord[] }>("taste-replace", {
+    lexicon: lexiconRows(lexicon),
+    threads: explorationThreads,
+    keepOut: keepOut.slice(0, 60),
+    count: n,
+    lastRated,
+  });
 
   const seen = new Set<string>();
-  return (Array.isArray(r.suggestions) ? r.suggestions : [])
+  return (Array.isArray(r?.suggestions) ? r.suggestions : [])
     .map(normalizeTasteGridWord)
     .filter((s) => {
       const k = s.word?.toLowerCase().trim();
@@ -556,50 +334,6 @@ export function normalizeDeepDiveResult(raw: DeepDiveResult): DeepDiveResult {
   };
 }
 
-const NAME_FEELING_SYSTEM = `You are Lexy — warm, literary, never corporate. You are a lexicographer of inner life: you find the exact English lemma for a feeling as it actually happened, not a prettier synonym of the word they reached for.
-
-Return ONLY valid JSON matching this shape:
-{
-  "vague_label": "the imprecise word or short phrase they reached for (e.g. disappointment)",
-  "why_not_that": "one or two sentences: what their vague label names, and why it misses THIS situation",
-  "primary": {
-    "word": "lowercase lemma they should actually use",
-    "pronunciation": "IPA in slashes like /ʃəˈɡrɪn/",
-    "part_of_speech": "noun|adjective|verb|etc",
-    "definition": "one concise line (max ~22 words)",
-    "origin": "etymology, concise",
-    "why": "why THIS word captures the situation — the scene, not the category",
-    "rewritten_phrase": "their thought, same voice and roughly the same length, using this word naturally — ready to paste"
-  },
-  "neighbors": [
-    {
-      "word": "lowercase lemma",
-      "pronunciation": "IPA in slashes",
-      "part_of_speech": "noun|adjective|verb|etc",
-      "definition": "one concise line",
-      "origin": "etymology, concise",
-      "why": "when you would pick this instead of the primary — a distinct shade, not a duplicate",
-      "rewritten_phrase": "their thought rewritten with THIS word, same voice"
-    }
-  ]
-}
-
-The bar: name the situation, not the emotion-category. If they said they feel disappointed for starting books and failing to keep the commitment, do not return a synonym of disappointment (let down, saddened, or disheartened as a mere swap). Reach for the word that names the specific sting — e.g. chagrin (embarrassment at failing oneself), akrasia (the will slipping against better judgment), self-reproach (the scolding after). The primary should be the best single fit; neighbors are real alternatives a careful speaker might choose instead.
-
-Hard ban:
-- Lazy synonym swaps with no situational fit (sad → melancholy, angry → irate, happy → joyful, disappointed → disheartened) unless the situation truly is that shade and nothing sharper exists.
-- Motivational-poster language, therapy-speak, and invented or overly technical nonce words a serious reader would never say or write.
-- Returning their own vague label as the primary.
-
-Rules:
-- primary is required; all of its fields are required.
-- neighbors: exactly 2 or 3 items, each a distinct shade of the same situation — not near-duplicates of the primary or of each other.
-- Every word MUST have IPA pronunciation in slashes.
-- rewritten_phrase keeps their voice (contractions, register, first person if they used it). Do not inflate it into an essay; one or two sentences, paste-ready.
-- Prefer one exact English lemma a serious reader would actually say or write. Rare is fine when it is the right word; obscure for its own sake is not.
-- If they described a situation without naming an emotion, infer vague_label from the nearest common word they might have used.
-${JSON_ONLY}`;
-
 function asCandidate(raw: unknown): FeelingNameCandidate | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -620,13 +354,7 @@ function asCandidate(raw: unknown): FeelingNameCandidate | null {
  * Find the precise lemma (and a paste-ready rewrite) for a feeling described in the user's own words.
  */
 export async function nameFeeling(text: string): Promise<FeelingNameResult> {
-  const trimmed = text.trim();
-  const raw = await chatJson<FeelingNameResult>(
-    NAME_FEELING_SYSTEM,
-    `They wrote:\n\n${trimmed}`,
-    1536,
-    0.35
-  );
+  const raw = asObject(await runTask<unknown>("name-feeling", { text: text.trim() }));
 
   const primary = asCandidate(raw.primary);
   if (!primary) throw new Error("Could not name that feeling — try a little more of the scene.");
@@ -650,54 +378,6 @@ export async function nameFeeling(text: string): Promise<FeelingNameResult> {
     neighbors,
   };
 }
-
-const SHARPEN_SYSTEM = `You are Lexy's sharpening editor — warm, literary, never corporate. Someone hands you their best attempt at a line. They can feel that more exact words exist; they just can't reach them. Sometimes they also tell you what they really mean and the tone they want.
-
-Your job: keep their meaning and their voice, and replace the vague, hedged or generic parts with words that name exactly what they mean.
-
-Return ONLY valid JSON matching this shape:
-{
-  "intent": "what they are actually trying to say, in one plain sentence — so they can check you understood",
-  "vague": [
-    { "phrase": "an exact substring of their line", "why": "what makes it vague, in a few words" }
-  ],
-  "versions": [
-    {
-      "tone": "one or two words naming the register (e.g. Direct, Diplomatic, Vivid, Warm, Formal)",
-      "text": "their whole line, sharpened",
-      "swaps": [
-        { "from": "an exact substring of their line", "to": "the exact substring of text that replaced it", "why": "the precise shade the new words capture" }
-      ]
-    }
-  ],
-  "words": [
-    {
-      "word": "lowercase lemma",
-      "pronunciation": "IPA in slashes",
-      "part_of_speech": "noun|adjective|verb|etc",
-      "definition": "one concise line",
-      "why": "the exact shade it adds over the vague phrase it replaces"
-    }
-  ]
-}
-
-Example — they wrote "the orbs are actually not the best looking", meant "they look cheap; I want them to feel premium", tone Direct:
-- vague: "not the best looking" (a hedge that names no actual flaw), "actually" (filler).
-- versions: Direct "The orbs look cheap — they need to feel premium." · Diplomatic "The orbs feel a little unrefined; they could look far more luxurious." · Vivid "The orbs read as plasticky when they should feel like polished glass."
-- words: unrefined, plasticky, lustrous, lackluster.
-
-The bar:
-- Name the actual quality. "Not the best looking" is a hedge; "cheap", "garish", "lackluster", "unrefined" each name a different flaw — pick the one that is true for their situation, using their note when they give one.
-- Precision over ornament. No thesaurus inflation, purple prose, corporate filler or therapy-speak. A plain exact word beats a rare decorative one.
-- Keep their voice: same person, tense and contractions; similar length (never more than about one and a half times theirs). A line stays a line.
-
-Rules:
-- versions: exactly 3, each a genuinely different register that still fits the situation — not a reshuffle of the same words. The first is your best fit in the tone they asked for (or in their own tone if they asked for none).
-- vague: 1 to 4 items, each phrase copied exactly from their line. If the line is already precise, return [] and keep the versions light-touch.
-- swaps: every "from" is an exact substring of their line; every "to" is an exact substring of that version's text.
-- words: 3 to 5 lemmas used in the versions that are worth adding to a personal vocabulary — skip everyday words (look, want, need).
-- Every word has IPA pronunciation in slashes.
-${JSON_ONLY}`;
 
 export interface SharpenInput {
   line: string;
@@ -761,15 +441,12 @@ export function normalizeSharpenResult(raw: unknown, line: string): SharpenResul
  */
 export async function sharpenLine(input: SharpenInput): Promise<SharpenResult> {
   const line = input.line.trim();
-  const intent = input.intent?.trim();
-  const tone = input.tone?.trim();
-  const user = [
-    `Their line:\n"""${line}"""`,
-    `What they really mean: ${intent || "(not given — infer it from the line)"}`,
-    `Tone they want: ${tone || "their own — keep it"}`,
-  ].join("\n\n");
-
-  const result = normalizeSharpenResult(await chatJson<unknown>(SHARPEN_SYSTEM, user, 1800, 0.5), line);
+  const raw = await runTask<unknown>("sharpen", {
+    line,
+    intent: input.intent?.trim() ?? "",
+    tone: input.tone?.trim() ?? "",
+  });
+  const result = normalizeSharpenResult(raw, line);
   if (!result.versions.length) throw new Error("Lexy couldn't sharpen that one — try adding what you mean.");
   return result;
 }

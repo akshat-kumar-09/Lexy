@@ -3,6 +3,7 @@
 import { IPA } from "@/components/IPA";
 import { PronounceButton } from "@/components/PronounceButton";
 import { KeepWord } from "@/components/KeepWord";
+import { LexyErrorNote } from "@/components/LexyErrorNote";
 import { sharpenLine, type SharpenInput } from "@/lib/claude";
 import { FAVOURITE_THRESHOLD } from "@/lib/lexyCopy";
 import { useLexicon, useOrbUsage } from "@/lib/store";
@@ -151,7 +152,7 @@ export function Sharpen() {
         </form>
       )}
 
-      {error && <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
+      {error && <LexyErrorNote message={error} />}
 
       <AnimatePresence mode="wait">
         {result && asked && (

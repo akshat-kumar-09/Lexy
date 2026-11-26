@@ -3,12 +3,14 @@
 import { AddWordBurst } from "@/components/AddWordBurst";
 import { GenreStrip } from "@/components/GenreStrip";
 import { IPA } from "@/components/IPA";
+import { LexyErrorNote } from "@/components/LexyErrorNote";
 import { PronounceButton } from "@/components/PronounceButton";
 import { RateBar } from "@/components/RateBar";
 import { SentenceCapture } from "@/components/SentenceCapture";
 import { ShareWordCard } from "@/components/ShareWordCard";
 import { VocabLevelBadge, VocabTierMark } from "@/components/VocabLevelBadge";
 import { generateTasteGrid, generateTasteReplacements } from "@/lib/claude";
+import { isSignInNeeded } from "@/lib/lexyApi";
 import { playLexiconChime } from "@/lib/sound";
 import { GRID_LEVEL_TARGETS, VOCAB_LEVELS, WHY_ELEVATED_WORDS } from "@/lib/vocabLevels";
 import { useLexicon, useTasteGridBatch, useTasteProfile, todayISODate } from "@/lib/store";
@@ -423,7 +425,7 @@ function DivePageContent() {
         </div>
 
         {gridError && (
-          <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{gridError}</p>
+          <LexyErrorNote message={gridError} />
         )}
 
         {gridLoading && displayGrid.length === 0 ? (
@@ -619,7 +621,11 @@ function DivePageContent() {
                       </p>
                     )}
 
-                    {storyError && !hasMeaning && (
+                    {storyError && !hasMeaning && isSignInNeeded(storyError) && (
+                      <LexyErrorNote message={storyError} className="mt-4" />
+                    )}
+
+                    {storyError && !hasMeaning && !isSignInNeeded(storyError) && (
                       <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                         {storyError}{" "}
                         <button
