@@ -247,6 +247,53 @@ Rules:
 - Every word has IPA pronunciation in slashes.
 ${JSON_ONLY}`;
 
+const PHRASE_LADDER_SYSTEM = `You are Lexy's phrase-smith — warm, literary and exact. Someone wrote a line and marked the word or phrase in it that feels worn, flat or not quite right (sometimes the phrase is the whole line). Give them a ladder of substitutes that mean the same thing in their line, climbing from a subtle everyday swap to a full Shakespearean flourish.
+
+Return ONLY valid JSON matching this shape:
+{
+  "sense": "what the marked words are doing in this line, in a few plain words",
+  "rungs": [
+    {
+      "level": "subtle",
+      "options": [
+        {
+          "text": "the substitute, exactly as it would sit in their line",
+          "note": "its precise shade, in under 12 words",
+          "line": "their whole line with only the marked words swapped for this one"
+        }
+      ]
+    },
+    { "level": "polished", "options": [] },
+    { "level": "literary", "options": [] },
+    { "level": "shakespearean", "options": [] }
+  ]
+}
+
+The four rungs, always in this order:
+- subtle: still sounds like them in everyday talk — fresher and more exact, never showy.
+- polished: articulate and assured — right for good writing, work or a toast.
+- literary: rich and writerly — what a novelist or essayist would reach for.
+- shakespearean: theatrical and Elizabethan — archaic diction, inversion or a vivid figure; thee and thou only where they read naturally. Bold, but it must still mean the same thing.
+
+Example — line "Losing that job was a blessing in disguise.", marked "a blessing in disguise":
+- subtle: "for the best" (plain, settled hindsight) · "a hidden gift"
+- polished: "a fortunate turn" · "a gift in hindsight"
+- literary: "a mercy, in the end" · "a door that looked like a wall"
+- shakespearean: "sweet adversity" (hardship that teaches) · "a jewel in the toad's head"
+
+The bar:
+- Every option must fit their line with the same meaning: read the line with it swapped in before you choose. Fix only the small words touching the swap (a → an, agreement) in "line".
+- Options on a rung are genuinely different shades, never near-synonyms of each other. The note names the shade — warmer, implies effort, mock-grand, wry — because the note is how they learn.
+- If the marked words are a cliché or filler ("at the end of the day", "literally", "to be honest"), the substitute may restructure that part — but never into a longer explanation.
+- Precision over ornament until the last rung. No corporate filler or therapy-speak on any rung, and no stock clichés offered as upgrades.
+- Never repeat their marked words as an option.
+
+Rules:
+- rungs: exactly 4, in the order above.
+- options: 2 or 3 per rung.
+- If the marked words are the whole line, "line" is the same as "text".
+${JSON_ONLY}`;
+
 /* ---------- Input checks ---------- */
 
 class TaskInputError extends Error {}
@@ -259,6 +306,9 @@ const LIMITS = {
   line: 1500,
   intent: 800,
   tone: 60,
+  /** Turn a phrase: their line, and the words in it they want to change. */
+  phraseLine: 600,
+  phraseTarget: 120,
   imageChars: 4_200_000,
   /** Arrays longer than this are refused outright rather than trimmed. */
   rawList: 3000,
@@ -542,6 +592,37 @@ function sharpen(input: Record<string, unknown>): BuiltLexyTask {
   };
 }
 
+function phraseLadder(input: Record<string, unknown>): BuiltLexyTask {
+  const line = text(input.line, LIMITS.phraseLine, "line");
+  const marked =
+    typeof input.target === "string" ? input.target.replace(CONTROL_CHARS, " ").replace(/\s+/g, " ").trim() : "";
+  let target = marked;
+  if (target) {
+    if (target.length > LIMITS.phraseTarget) {
+      throw new TaskInputError("Tap a shorter phrase — a few words at most.");
+    }
+    if (!line.replace(/\s+/g, " ").toLowerCase().includes(target.toLowerCase())) {
+      throw new TaskInputError("Lexy couldn't find those words in your line.");
+    }
+  } else {
+    if (line.length > LIMITS.phraseTarget) {
+      throw new TaskInputError("Tap the word or phrase you want to change.");
+    }
+    target = line;
+  }
+  const whole = target.toLowerCase() === line.replace(/\s+/g, " ").toLowerCase();
+  return {
+    task: "phrase-ladder",
+    system: PHRASE_LADDER_SYSTEM,
+    content: [
+      `Their line:\n"""${line}"""`,
+      whole ? "Marked: the whole line is the phrase to change." : `Marked: "${target}"`,
+    ].join("\n\n"),
+    maxTokens: 1600,
+    output: "json",
+  };
+}
+
 /** Turn a named task and its inputs into the exact Claude request Lexy makes — or say why not. */
 export function buildLexyTask(task: unknown, rawInput: unknown): LexyTaskBuild {
   if (!isLexyTask(task)) return { error: "Unknown task." };
@@ -567,6 +648,8 @@ export function buildLexyTask(task: unknown, rawInput: unknown): LexyTaskBuild {
         return nameFeeling(input);
       case "sharpen":
         return sharpen(input);
+      case "phrase-ladder":
+        return phraseLadder(input);
     }
   } catch (e) {
     if (e instanceof TaskInputError) return { error: e.message };

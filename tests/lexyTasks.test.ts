@@ -39,6 +39,7 @@ describe("Lexy's server-side tasks", () => {
       handwriting: { image: "aGVsbG8=", mediaType: "image/png" },
       "name-feeling": { text: "I keep starting books and never finishing them." },
       sharpen: { line: "the orbs are not the best looking" },
+      "phrase-ladder": { line: "I want Lexy to be a masterpiece.", target: "masterpiece" },
     };
     for (const task of LEXY_TASKS) {
       const b = built(task, inputs[task]);
@@ -101,6 +102,26 @@ describe("Lexy's server-side tasks", () => {
       b.content,
       'Their line:\n"""it was fine"""\n\nWhat they really mean: (not given — infer it from the line)\n\nTone they want: Direct'
     );
+  });
+});
+
+describe("Turn a phrase", () => {
+  it("marks the tapped words in the line", () => {
+    const b = built("phrase-ladder", { line: "I want Lexy to be a masterpiece.", target: "  masterpiece " });
+    assert.equal(b.content, 'Their line:\n"""I want Lexy to be a masterpiece."""\n\nMarked: "masterpiece"');
+    assert.match(b.system ?? "", /shakespearean/);
+  });
+
+  it("treats a short line with nothing tapped as the phrase itself", () => {
+    const b = built("phrase-ladder", { line: "it is what it is" });
+    assert.match(String(b.content), /the whole line is the phrase to change/);
+  });
+
+  it("refuses words that aren't in the line, or a long line with nothing tapped", () => {
+    assert.match(refused("phrase-ladder", { line: "Time flies.", target: "masterpiece" }), /couldn't find those words/);
+    assert.match(refused("phrase-ladder", { line: "word ".repeat(40) }), /Tap the word or phrase/);
+    assert.match(refused("phrase-ladder", { line: "x".repeat(601), target: "x" }), /longer than Lexy can take/);
+    assert.match(refused("phrase-ladder", { line: "a ".repeat(200), target: "a ".repeat(70) }), /shorter phrase/);
   });
 });
 

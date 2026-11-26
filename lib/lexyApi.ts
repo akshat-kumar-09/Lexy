@@ -14,6 +14,7 @@ export const LEXY_TASKS = [
   "handwriting",
   "name-feeling",
   "sharpen",
+  "phrase-ladder",
 ] as const;
 
 export type LexyTaskName = (typeof LEXY_TASKS)[number];
