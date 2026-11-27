@@ -2,10 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropic, MISSING_CLAUDE_KEY, replyText } from "@/lib/anthropicServer";
 import { assertSameOrigin, rateLimit } from "@/lib/apiGuard";
 import { getSql } from "@/lib/db";
-import { DAILY_LIMIT_REACHED, LEXY_RESTING, SIGN_IN_NEEDED, type LexyErrorCode } from "@/lib/lexyApi";
+import { DAILY_LIMIT_REACHED, LEXY_RESTING, SIGN_IN_BROKEN, SIGN_IN_NEEDED, type LexyErrorCode } from "@/lib/lexyApi";
 import { LEXY_MODEL } from "@/lib/model";
 import { parseModelJson } from "@/lib/parseJson";
-import { currentUserId } from "@/lib/serverAuth";
+import { currentUserId, signInBroken } from "@/lib/serverAuth";
 import { spendAllowance } from "@/lib/usage";
 import {
   cleanSenseHint,
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
 
   // Only fresh generations need sign-in and count against the limits — cached words are free to open.
   const userId = await currentUserId();
-  if (!userId) return fail(401, SIGN_IN_NEEDED, "signin");
+  if (!userId) return signInBroken() ? fail(503, SIGN_IN_BROKEN) : fail(401, SIGN_IN_NEEDED, "signin");
 
   const rateErr = rateLimit(req, "word-story", 90, 60_000);
   if (rateErr) return rateErr;

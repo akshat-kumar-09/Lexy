@@ -24,6 +24,7 @@ export function isLexyTask(v: unknown): v is LexyTaskName {
 }
 
 export const SIGN_IN_NEEDED = "Sign in to let Lexy find words for you.";
+export const SIGN_IN_BROKEN = "Lexy can't check sign-ins right now — that's on our side, not yours. Please try again soon.";
 export const DAILY_LIMIT_REACHED = "You've done a lot with Lexy today — your daily allowance resets tomorrow.";
 export const LEXY_RESTING = "Lexy has reached today's limit for everyone — please try again tomorrow.";
 
