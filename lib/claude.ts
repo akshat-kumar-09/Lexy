@@ -4,6 +4,7 @@ import {
   type LexyErrorCode,
   type LexyTaskName,
 } from "@/lib/lexyApi";
+import { lexyFetch } from "@/lib/authFetch";
 import { normalizePhraseLadder, type PhraseLadderResult } from "@/lib/phraseLadder";
 import { clampVocabLevel } from "@/lib/vocabLevels";
 import type {
@@ -32,7 +33,7 @@ const TASK_URL = "/api/lexy";
 
 /** Run one named task. JSON tasks resolve to the parsed reply; handwriting resolves to text. */
 async function runTask<T>(task: LexyTaskName, input: Record<string, unknown>): Promise<T> {
-  const res = await fetch(TASK_URL, {
+  const res = await lexyFetch(TASK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ task, input }),

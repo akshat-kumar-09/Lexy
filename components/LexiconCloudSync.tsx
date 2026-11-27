@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@clerk/nextjs";
+import { lexyFetch } from "@/lib/authFetch";
 import { mergeLexiconPreferLocal, normalizeLexiconPayload } from "@/lib/lexiconMigrate";
 import { useLexicon } from "@/lib/store";
 import type { LexiconData } from "@/lib/types";
@@ -64,7 +65,7 @@ function LexiconCloudSyncInner() {
     for (let attempt = 1; attempt <= GET_MAX_ATTEMPTS; attempt++) {
       if (abort()) return null;
       try {
-        res = await fetch("/api/lexicon", { credentials: "same-origin" });
+        res = await lexyFetch("/api/lexicon");
       } catch {
         res = null;
       }
@@ -92,9 +93,8 @@ function LexiconCloudSyncInner() {
   const pushSnapshot = useCallback(
     async (data: LexiconData, deleted_words: string[]): Promise<boolean> => {
       try {
-        const res = await fetch("/api/lexicon", {
+        const res = await lexyFetch("/api/lexicon", {
           method: "PUT",
-          credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             words: data.words,

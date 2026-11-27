@@ -1,3 +1,4 @@
+import { lexyFetch } from "@/lib/authFetch";
 import { normalizeDeepDiveResult } from "@/lib/claude";
 import type { DeepDiveResult } from "@/lib/types";
 import {
@@ -56,7 +57,11 @@ async function fetchPart(
 ): Promise<WordStoryPartData> {
   const q = new URLSearchParams({ word, part });
   if (sense) q.set("sense", sense);
-  const res = await fetch(`/api/word-story?${q.toString()}`, { signal });
+  const url = `/api/word-story?${q.toString()}`;
+  // Opened words come straight from the cache for anyone; only a word nobody has opened yet needs
+  // sign-in, so the session token goes along on that retry alone (keeping cached replies shareable).
+  let res = await fetch(url, { signal });
+  if (res.status === 401) res = await lexyFetch(url, { signal });
   const text = await res.text();
   let body: { data?: WordStoryPartData; error?: { message?: string } };
   try {
