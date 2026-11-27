@@ -4,6 +4,7 @@ import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { GenreStrip } from "@/components/GenreStrip";
 import { SetupGifs } from "@/components/SetupGifs";
+import { lexyFetch } from "@/lib/authFetch";
 import { mergeLexiconPreferLocal } from "@/lib/lexiconMigrate";
 import { importLexiconFromUnknown, useLexicon } from "@/lib/store";
 import { clearSetupHintDismissed } from "@/lib/setupStorage";
@@ -41,7 +42,7 @@ function CloudCheckpoints() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/lexicon/history");
+        const res = await lexyFetch("/api/lexicon/history");
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as { checkpoints?: Checkpoint[] };
         if (!cancelled) setCheckpoints(data.checkpoints ?? []);
@@ -59,7 +60,7 @@ function CloudCheckpoints() {
     setRestoringId(id);
     setMsg(null);
     try {
-      const res = await fetch(`/api/lexicon/history/${id}`, { method: "POST" });
+      const res = await lexyFetch(`/api/lexicon/history/${id}`, { method: "POST" });
       if (!res.ok) {
         setMsg("Could not restore that checkpoint — try again in a moment.");
         return;

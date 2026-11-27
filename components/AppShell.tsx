@@ -6,7 +6,7 @@ import { PageEssence } from "@/components/PageEssence";
 import { SelectionDeepDive } from "@/components/SelectionDeepDive";
 import { VoiceValuedButton } from "@/components/VoiceValuedButton";
 import { getEssenceLine } from "@/lib/languageQuotes";
-import { ORBS, orbBackground, orbById, orbIdForLocation } from "@/lib/orbs";
+import { ORBS, SUN, orbBackground, orbById, orbIdForLocation } from "@/lib/orbs";
 import { useOrbUsage } from "@/lib/store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -24,7 +24,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const orbId = orbIdForLocation(pathname ?? "/");
   const title = orbId ? orbById(orbId).label : PAGE_TITLES[pathname ?? ""];
 
-  // Every visit feeds the orb sizes on Home.
+  // Every visit feeds the planet sizes on Home.
   useEffect(() => {
     const id = orbIdForLocation(pathname ?? "/", window.location.hash);
     if (id) recordVisit(id);
@@ -40,12 +40,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             className="sticky top-0 z-30 flex min-h-[3.25rem] items-center gap-3 border-b border-[#EDE8E0] bg-[#FEFCF8]/90 px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] backdrop-blur-md sm:px-5 md:px-10 md:py-3"
             data-no-deep-dive
           >
-            <Link href="/" aria-label="Lexy home — all the orbs" className="group flex min-h-11 shrink-0 items-center gap-2.5">
-              <span
-                aria-hidden
-                className="h-7 w-7 rounded-full shadow-[0_0_14px_rgba(184,149,94,0.45)] transition-transform duration-300 group-hover:scale-110"
-                style={{ background: orbBackground(orbById("lexicon")) }}
-              />
+            <Link
+              href="/"
+              aria-label="Lexy home — back to your universe"
+              className="group flex min-h-11 shrink-0 items-center gap-2.5"
+            >
+              {/* The planet you've landed on, on its orbit. */}
+              <span aria-hidden className="relative flex h-8 w-10 items-center justify-center">
+                <span className="absolute left-1/2 top-1/2 h-[11px] w-10 -translate-x-1/2 -translate-y-1/2 -rotate-[16deg] rounded-[50%] border border-[#A8875C]/45" />
+                <span
+                  className="relative h-6 w-6 rounded-full shadow-[0_0_12px_rgba(184,149,94,0.4)] transition-transform duration-300 group-hover:scale-110"
+                  style={{ background: orbBackground(orbById(orbId ?? SUN)) }}
+                />
+              </span>
               <span className="font-serif text-xl font-bold leading-none">Lexy</span>
             </Link>
             {title && (

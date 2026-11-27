@@ -240,10 +240,22 @@ button {
   animation: lexy-chase-spin 7s linear infinite;
 }
 
+/* ── The chart: dotted orbits that travel, inner ones faster, as Kepler would have it ── */
+@keyframes lexy-orbit-travel {
+  to {
+    stroke-dashoffset: -80;
+  }
+}
+
+.lexy-orbit {
+  animation: lexy-orbit-travel 90s linear infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lexy-orb-float,
   .lexy-orb-spin,
-  .lexy-orb-new {
+  .lexy-orb-new,
+  .lexy-orbit {
     animation: none;
   }
 }

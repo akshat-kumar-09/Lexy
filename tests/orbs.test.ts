@@ -2,14 +2,18 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ORBS,
+  SUN,
   VISIT_DEDUPE_MS,
   bumpVisit,
   computeOrbs,
   computeRadii,
+  constellationLines,
   layoutOrbs,
   localISODate,
   orbIdForLocation,
+  orbitThrough,
   overlapCount,
+  skyWords,
   type OrbContext,
   type OrbId,
 } from "../lib/orbs";
@@ -149,6 +153,61 @@ describe("layoutOrbs", () => {
   it("keeps bigger weights bigger", () => {
     const r = computeRadii([3, 1, 1, 1, 1, 1], 1200, 800);
     assert.ok(r[0] > r[1]);
+  });
+});
+
+describe("the chart", () => {
+  const fields: [number, number][] = [
+    [375, 560],
+    [390, 640],
+    [768, 860],
+    [1440, 700],
+  ];
+  const sunAt = ORBS.findIndex((o) => o.id === SUN);
+
+  for (const [w, h] of fields) {
+    it(`keeps the sun at the centre of ${w}×${h}, with the planets around it`, () => {
+      const weights = ORBS.map((o, i) => (o.id === SUN ? 1.3 : [3.4, 1, 0.8, 1.2, 1.1, 0.9, 2.2, 1.6][i]));
+      const { positions, radii } = layoutOrbs(computeRadii(weights, w, h, true), w, h, [], sunAt);
+      assert.equal(overlapCount(positions, radii), 0);
+      assert.ok(Math.abs(positions[sunAt].x - w / 2) < 0.5 && Math.abs(positions[sunAt].y - h / 2) < 0.5);
+      positions.forEach((p, i) => {
+        assert.ok(p.x - radii[i] >= -0.5 && p.x + radii[i] <= w + 0.5, `${ORBS[i].id} inside horizontally`);
+        assert.ok(p.y - radii[i] >= -0.5 && p.y + radii[i] <= h + 0.5, `${ORBS[i].id} inside vertically`);
+      });
+    });
+  }
+
+  it("draws each orbit through its planet", () => {
+    const sun = { x: 100, y: 100 };
+    const planet = { x: 160, y: 180 };
+    const { rx, ry } = orbitThrough(planet, sun, 1.25);
+    const dx = (planet.x - sun.x) / rx;
+    const dy = (planet.y - sun.y) / ry;
+    assert.ok(Math.abs(dx * dx + dy * dy - 1) < 1e-9);
+    assert.ok(Math.abs(ry / rx - 1.25) < 1e-9);
+  });
+
+  it("never turns a word rated 'not for me' into a star", () => {
+    const now = at(9);
+    const loved = word("affluence", "deep_dive", 1, now);
+    const notForMe = { ...word("lightning", "deep_dive", 0, now), rating: 3.3 };
+    const stars = skyWords({ affluence: loved, lightning: notForMe });
+    assert.ok(stars.includes("affluence"));
+    assert.ok(!stars.some((s) => s.toLowerCase() === "lightning"));
+  });
+
+  it("joins near stars into constellations, once each, and leaves far ones alone", () => {
+    const stars = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 12, y: 8 },
+      { x: 500, y: 500 },
+    ];
+    assert.deepEqual(constellationLines(stars, 50), [
+      [0, 1],
+      [1, 2],
+    ]);
   });
 });
 
