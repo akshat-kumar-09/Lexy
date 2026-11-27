@@ -1,3 +1,4 @@
+import { NOT_FOR_ME_BELOW } from "@/lib/lexyCopy";
 import type { LexiconData, WordSource } from "@/lib/types";
 
 /**
@@ -119,6 +120,9 @@ export const ORBS: readonly OrbDef[] = [
   },
 ];
 
+/** At the heart of the chart: your own words, which every other planet circles. */
+export const SUN: OrbId = "lexicon";
+
 export function orbById(id: OrbId): OrbDef {
   return ORBS.find((o) => o.id === id)!;
 }
@@ -209,6 +213,8 @@ export interface OrbState {
   line: string;
   /** Untouched while you're active elsewhere — gets a soft shimmer. */
   fresh: boolean;
+  /** Words kept from this planet — they circle it as moons. */
+  kept: number;
 }
 
 /** How much your own habits can grow an orb, at full confidence. */
@@ -227,12 +233,14 @@ export function computeOrbs(ctx: OrbContext): OrbState[] {
   const metaphorDays = ctx.lexicon.metaphor_history ?? [];
 
   const usage = Object.fromEntries(ORBS.map((o) => [o.id, 0])) as Record<OrbId, number>;
+  const keptHere = Object.fromEntries(ORBS.map((o) => [o.id, 0])) as Record<OrbId, number>;
   for (const def of ORBS) {
     const v = ctx.visits?.[def.id];
     if (v) usage[def.id] += decayed(v.score, v.at, now);
   }
   for (const w of words) {
     const id = SOURCE_ORB[w.source];
+    if (id) keptHere[id] += 1;
     const t = dateMs(w.added);
     if (id && t != null) usage[id] += decayed(WORD_KEPT, t, now);
   }
@@ -320,7 +328,7 @@ export function computeOrbs(ctx: OrbContext): OrbState[] {
     );
     const line = (pinned ?? loudest)?.line ?? def.tagline;
 
-    return { id: def.id, def, weight, usage: usage[def.id], line, fresh };
+    return { id: def.id, def, weight, usage: usage[def.id], line, fresh, kept: keptHere[def.id] };
   });
 }
 
@@ -340,14 +348,31 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }
 
-/** Area proportional to weight, filling a comfortable share of the field. */
-export function computeRadii(weights: number[], width: number, height: number): number[] {
+/**
+ * Area proportional to weight, filling a comfortable share of the field. `roomy` leaves more
+ * open sky between them — for the chart, where the orbits need room to show.
+ */
+export function computeRadii(weights: number[], width: number, height: number, roomy = false): number[] {
   const short = Math.min(width, height);
-  const fill = width > height ? 0.3 : 0.38;
+  const fill = (width > height ? 0.3 : 0.38) * (roomy ? 0.8 : 1);
   const total = weights.reduce((a, b) => a + b, 0) || 1;
   const minR = Math.min(46, short * 0.14);
   const maxR = short * 0.3;
   return weights.map((w) => clamp(Math.sqrt((width * height * fill * w) / total / Math.PI), minR, maxR));
+}
+
+/**
+ * The chart's bodies: small planets that grow with use, and a larger sun at `sunAt` that grows
+ * with your words. Names sit beneath the planets, so the planets themselves can stay small and
+ * leave open sky for their orbits.
+ */
+export function chartBodyRadii(weights: number[], width: number, height: number, sunAt: number): number[] {
+  const short = Math.min(width, height);
+  return weights.map((w, i) =>
+    i === sunAt
+      ? clamp(short * 0.12 * Math.sqrt(Math.max(1, w / 1.3)), short * 0.11, short * 0.17)
+      : clamp(short * 0.068 * Math.sqrt(Math.max(0.1, w)), short * 0.05, short * 0.11)
+  );
 }
 
 /** Pairs of circles that overlap by more than `slack` pixels. */
@@ -361,22 +386,34 @@ export function overlapCount(pos: Point[], r: number[], slack = 0.5): number {
   return n;
 }
 
-function relax(r: number[], width: number, height: number, seed: (Point | undefined)[]): Point[] {
+function relax(
+  r: number[],
+  width: number,
+  height: number,
+  seed: (Point | undefined)[],
+  pin: number | undefined
+): Point[] {
   const n = r.length;
   const cx = width / 2;
   const cy = height / 2;
-  const gap = clamp(Math.min(width, height) * 0.03, 8, 22);
+  // Around a sun the planets keep a little more distance, so their orbits show between them.
+  const gap = pin == null ? clamp(Math.min(width, height) * 0.03, 8, 22) : clamp(Math.min(width, height) * 0.045, 12, 30);
   const meanR = r.reduce((a, b) => a + b, 0) / Math.max(1, n);
   const stretch = Math.sqrt(width / height);
+  const pinned = (i: number) => i === pin;
+  const ring = pin == null ? n : n - 1;
 
   // Seed from where orbs were last time (so a size change is a nudge, not a reshuffle);
   // otherwise each orb starts in its own fixed direction from the centre, so the sky
-  // keeps its shape as sizes change and you learn where things live.
+  // keeps its shape as sizes change and you learn where things live. A pinned orb — the
+  // sun — always sits at the centre.
   const pos: Point[] = r.map((_, i) => {
+    if (pinned(i)) return { x: cx, y: cy };
     const s = seed[i];
     if (s && Number.isFinite(s.x) && Number.isFinite(s.y)) return { x: s.x, y: s.y };
-    const angle = HOME_ANGLE + (i / n) * Math.PI * 2;
-    const dist = meanR * 1.6;
+    const k = pin != null && i > pin ? i - 1 : i;
+    const angle = HOME_ANGLE + (k / ring) * Math.PI * 2;
+    const dist = meanR * (pin == null ? 1.6 : 2.4);
     return { x: cx + Math.cos(angle) * dist * stretch, y: cy + (Math.sin(angle) * dist) / stretch };
   });
 
@@ -391,6 +428,7 @@ function relax(r: number[], width: number, height: number, seed: (Point | undefi
         p.y += (cy - p.y) * gy;
       }
     }
+    if (pin != null) pos[pin] = { x: cx, y: cy };
     for (let i = 0; i < n; i++) {
       for (let j = i + 1; j < n; j++) {
         let dx = pos[j].x - pos[i].x;
@@ -404,9 +442,9 @@ function relax(r: number[], width: number, height: number, seed: (Point | undefi
           d = 1;
         }
         const push = min - d;
-        // Bigger orbs give way less.
-        const wi = r[j] / (r[i] + r[j]);
-        const wj = r[i] / (r[i] + r[j]);
+        // Bigger orbs give way less; the sun doesn't give way at all.
+        const wi = pinned(i) ? 0 : pinned(j) ? 1 : r[j] / (r[i] + r[j]);
+        const wj = pinned(j) ? 0 : pinned(i) ? 1 : r[i] / (r[i] + r[j]);
         pos[i].x -= (dx / d) * push * wi;
         pos[i].y -= (dy / d) * push * wi;
         pos[j].x += (dx / d) * push * wj;
@@ -421,6 +459,7 @@ function relax(r: number[], width: number, height: number, seed: (Point | undefi
 
   for (let it = 0; it < 320; it++) step(true);
   for (let it = 0; it < 80; it++) step(false);
+  if (pin != null && Math.abs(pos[pin].x - cx) > 0.5) pos[pin] = { x: cx, y: cy };
   return pos;
 }
 
@@ -432,15 +471,53 @@ export function layoutOrbs(
   radii: number[],
   width: number,
   height: number,
-  seed: (Point | undefined)[] = []
+  seed: (Point | undefined)[] = [],
+  /** Index of an orb held at the centre — the sun the others circle. */
+  pin?: number
 ): { positions: Point[]; radii: number[] } {
+  const p = pin != null && pin >= 0 && pin < radii.length ? pin : undefined;
   let r = radii.slice();
-  let positions = relax(r, width, height, seed);
+  let positions = relax(r, width, height, seed, p);
   for (let attempt = 0; attempt < 6 && overlapCount(positions, r) > 0; attempt++) {
     r = r.map((x) => x * 0.9);
-    positions = relax(r, width, height, seed);
+    positions = relax(r, width, height, seed, p);
   }
   return { positions, radii: r };
+}
+
+/**
+ * The orbit a planet travels: an ellipse around the sun that passes through the planet,
+ * stretched to the shape of the sky (`aspect` = height ÷ width of the orbit).
+ */
+export function orbitThrough(planet: Point, sun: Point, aspect: number): { rx: number; ry: number } {
+  const dx = planet.x - sun.x;
+  const dy = planet.y - sun.y;
+  const rx = Math.hypot(dx, dy / aspect);
+  return { rx, ry: rx * aspect };
+}
+
+/** Constellations: each star joined to its nearest neighbour, when it's near enough. */
+export function constellationLines(stars: Point[], reach: number): [number, number][] {
+  const lines: [number, number][] = [];
+  const seen = new Set<string>();
+  stars.forEach((a, i) => {
+    let best = -1;
+    let bestD = Infinity;
+    stars.forEach((b, j) => {
+      if (i === j) return;
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (d < bestD) {
+        bestD = d;
+        best = j;
+      }
+    });
+    if (best < 0 || bestD > reach) return;
+    const key = i < best ? `${i}-${best}` : `${best}-${i}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    lines.push([Math.min(i, best), Math.max(i, best)]);
+  });
+  return lines;
 }
 
 // ── The sky of words behind the orbs ──────────────────────────
@@ -454,11 +531,14 @@ const SKY_FALLBACK = [
 
 /** Your own words become the stars; until there are enough, a few beautiful ones keep you company. */
 export function skyWords(lexicon: LexiconData["words"], count = 30): string[] {
-  const mine = Object.values(lexicon ?? {})
+  const all = Object.values(lexicon ?? {});
+  // Words rated "not for me" stay on record but never become stars.
+  const mine = all
+    .filter((w) => w.rating >= NOT_FOR_ME_BELOW)
     .sort((a, b) => (b.added ?? "").localeCompare(a.added ?? ""))
     .map((w) => w.word)
     .slice(0, count);
-  const seen = new Set(mine.map((w) => w.toLowerCase()));
+  const seen = new Set(all.map((w) => w.word.toLowerCase()));
   const fill = SKY_FALLBACK.filter((w) => !seen.has(w)).slice(0, Math.max(0, Math.min(count, 22) - mine.length));
   return [...mine, ...fill];
 }
